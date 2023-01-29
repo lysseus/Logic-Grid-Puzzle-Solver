@@ -189,7 +189,7 @@
      #'(λgo! (rels-clause ans) ...)]))
 (define (λgo! . ans)
   (initialize-cmd-tries)
-  (current-expected ans)
+  (current-answers ans)
   (big-bang (new-slv-world ans)
     (to-draw render)
     (on-key key-handler)

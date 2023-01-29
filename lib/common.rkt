@@ -21,16 +21,21 @@
 (define BOX-FALSE #\u2718)
 
 (define FONT-COLOR 'white)
+(define REV-FONT-COLR 'black)
+(define TITLE-COLOR 'white)
 (define FALSE-COLOR 'red)
 (define TRUE-COLOR 'green)
 (define FRAME-COLOR 'lightgray)
 (define PROP-FRAME-COLOR 'transparent)
 (define SUB-GRID-COLOR 'white)
+(define NO-COLOR 'transparent)
+(define HILITE-COLOR 'purple)
 
-(define FONT-SIZE 30)
+(define FONT-SIZE 24)
 
 (define FRAME-W-PAD 8)
 (define FRAME-H-PAD 8)
+(define PIXELS 4)
 
 (define-syntax puzzle
   (λ (stx)
@@ -105,3 +110,5 @@
      (void)]
     [(true? (debug))
      (apply printf vs)]))
+
+(define current-log (make-parameter #f))

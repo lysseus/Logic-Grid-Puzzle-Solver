@@ -1,0 +1,153 @@
+[1] relate! #f (dragon . reogarth) (treasure . gems)
+
+[2] seq! (age (treasure . food) (type . blue))
+
+    ▪ relate! #f (treasure . food) (type . blue)
+
+    ▪ relate! #f (type . blue) (treasure . food)
+
+    ▪ relate! #f (treasure . food) (age . ancient)
+
+    ▪ relate! #f (type . blue) (age . young)
+
+[3] relate! #t (dragon . simish) (type . green)
+
+    ▪ relate! #f (dragon . reogarth) (type . green)
+
+    ▪ relate! #f (dragon . etorniris) (type . green)
+
+    ▪ relate! #f (dragon . bormis) (type . green)
+
+    ▪ relate! #f (dragon . simish) (type . red)
+
+    ▪ relate! #f (dragon . simish) (type . blue)
+
+    ▪ relate! #f (dragon . simish) (type . black)
+
+[4] seq! ((age . 2) (dragon . reogarth) (type . green))
+
+    ▪ distinct ((dragon . reogarth) (type . green))
+
+    ▪ relate! #f (dragon . reogarth) (type . green)
+
+    ▪ relate! #f (type . green) (dragon . reogarth)
+
+    ▪ relate! #f (dragon . reogarth) (age . old)
+
+    ▪ relate! #f (dragon . reogarth) (age . ancient)
+
+    ▪ relate! #f (type . green) (age . young)
+
+    ▪ relate! #f (dragon . simish) (age . young)
+
+    ▪ relate! #f (type . green) (age . adult)
+
+    ▪ relate! #f (dragon . simish) (age . adult)
+
+[5] relate! #t (dragon . bormis) (type . black)
+
+    ▪ relate! #f (dragon . reogarth) (type . black)
+
+    ▪ relate! #f (dragon . etorniris) (type . black)
+
+    ▪ relate! #f (dragon . bormis) (type . red)
+
+    ▪ relate! #f (dragon . bormis) (type . blue)
+
+[6] distinct ((dragon . reogarth) (type . green) (treasure . food) (age . ancient))
+
+    ▪ relate! #f (dragon . reogarth) (type . green)
+
+    ▪ relate! #f (dragon . reogarth) (treasure . food)
+
+    ▪ relate! #f (dragon . reogarth) (age . ancient)
+
+    ▪ relate! #f (type . green) (dragon . reogarth)
+
+    ▪ relate! #f (type . green) (treasure . food)
+
+    ▪ relate! #f (dragon . simish) (treasure . food)
+
+    ▪ relate! #f (type . green) (age . ancient)
+
+    ▪ relate! #t (type . green) (age . old)
+
+    ▪ relate! #f (type . red) (age . old)
+
+    ▪ relate! #f (type . blue) (age . old)
+
+    ▪ relate! #f (type . black) (age . old)
+
+    ▪ relate! #f (dragon . bormis) (age . old)
+
+    ▪ relate! #t (age . old) (dragon . simish)
+
+    ▪ relate! #f (age . ancient) (dragon . simish)
+
+    ▪ relate! #f (age . old) (treasure . food)
+
+    ▪ relate! #f (age . old) (dragon . etorniris)
+
+    ▪ relate! #f (treasure . food) (dragon . reogarth)
+
+    ▪ relate! #f (treasure . food) (type . green)
+
+    ▪ relate! #f (treasure . food) (age . ancient)
+
+    ▪ relate! #f (age . ancient) (dragon . reogarth)
+
+    ▪ relate! #f (age . ancient) (type . green)
+
+    ▪ relate! #f (age . ancient) (treasure . food)
+
+[7] xor! key1=((age . ancient) (type . red)) key2=((age . ancient) (treasure . gold))
+
+    ▪ relate! #f (type . red) (treasure . gold)
+
+[2] seq! (age (treasure . food) (type . blue))
+
+    ▪ relate! #f (treasure . food) (type . blue)
+
+    ▪ relate! #f (type . blue) (treasure . food)
+
+    ▪ relate! #f (treasure . food) (age . old)
+
+    ▪ relate! #f (treasure . food) (age . ancient)
+
+    ▪ relate! #f (type . blue) (age . young)
+
+    ▪ relate! #f (type . blue) (age . old)
+
+[4] seq! ((age . 2) (dragon . reogarth) (type . green))
+
+    ▪ distinct ((dragon . reogarth) (type . green))
+
+    ▪ relate! #f (dragon . reogarth) (type . green)
+
+    ▪ relate! #f (type . green) (dragon . reogarth)
+
+    ▪ relate! #t (dragon . reogarth) (age . young)
+
+    ▪ relate! #f (dragon . etorniris) (age . young)
+
+    ▪ relate! #f (dragon . reogarth) (type . blue)
+
+    ▪ relate! #t (dragon . reogarth) (type . red)
+
+    ▪ relate! #f (dragon . etorniris) (type . red)
+
+    ▪ relate! #t (dragon . etorniris) (type . blue)
+
+    ▪ relate! #f (dragon . etorniris) (treasure . food)
+
+    ▪ relate! #t (treasure . food) (dragon . bormis)
+
+    ▪ relate! #f (treasure . gems) (dragon . bormis)
+
+    ▪ relate! #f (treasure . food) (type . red)
+
+    ▪ relate! #t (treasure . food) (type . black)
+
+    ▪ relate! #f (treasure . gems) (type . black)
+
+    ▪ relate! #f (treasure . mundane) (type . black)

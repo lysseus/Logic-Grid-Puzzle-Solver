@@ -4,7 +4,7 @@
 ;;; INIT
 ;;;
 
-(provide init)
+(provide init λinit)
 
 (require (for-syntax syntax/parse)
          (only-in "common.rkt" category+properties/c current-puzzle)
@@ -13,11 +13,11 @@
 
 (define-syntax (init stx)
   (syntax-parse stx
-    [(_ c+ps ...) #'(:init (quote c+ps) ...)]))
+    [(_ c+ps ...) #'(λinit (quote c+ps) ...)]))
 ;; Creates a puzzle-hash from the cs list of category subliss.
 ;; The first element of a category sublist is the category name, followed by
 ;; category elements. 
-(define/contract (:init . inits)
+(define/contract (λinit . inits)
   (->* () #:rest category+properties/c any)
   (define matrix (cons (length inits)
                        (for/fold ([cols #f])

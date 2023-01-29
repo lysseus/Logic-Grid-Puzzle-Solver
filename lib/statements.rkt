@@ -14,19 +14,24 @@
          utils/cmd-queue
          (only-in utils/list assoc->pairs pairs->assoc list->list*)
          (only-in "common.rkt" UNKNOWN true? unknown? 1? puzzle key/c
-                  category/c valid-key/c suppress-error debug-printf)
+                  category/c valid-key/c suppress-error debug-printf
+                  current-log)
          "clauses.rkt"
          (only-in "queries.rkt" ? ?= ?-= ?n))
 
 (define prev-stmt# (make-parameter #f))
 (define (log . vs)
   (define stmt# (cmd-stmt# processing-cmd))
-  (cond
-    [(and (not (false? prev-stmt#))
-          (eq? stmt# (prev-stmt#)))
-     (printf "    ~a " #\u25aa)]
-      [else (printf "[~a] " stmt#)])
-  (apply printf vs)
+  (define str (string-append
+               (cond
+                 [(and (not (false? prev-stmt#))
+                       (eq? stmt# (prev-stmt#)))
+                  (format "    ~a " #\u25aa)]
+                 [else (format "[~a] " stmt#)])
+               (apply format vs)))  
+  (if (false? (current-log))
+      (printf "~a~%" str)
+      (displayln str (current-log)))
   (prev-stmt# stmt#))
 
 ;;;

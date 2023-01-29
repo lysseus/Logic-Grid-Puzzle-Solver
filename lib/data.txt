@@ -1,0 +1,23 @@
+
+(init
+	(dragon reogarth simish etorniris bormis)
+	(type red blue green black)
+	(treasure gems mundane gold food)
+	(age young adult old ancient)
+)
+
+
+(relate! #f (dragon . reogarth) (treasure . gems))
+(seq! age (treasure . food) (type . blue))
+(relate! (dragon . simish) (type . green))
+(seq! (age . 2) (dragon . reogarth) (type . green))
+(relate! (dragon . bormis) (type . black))
+(distinct! (dragon . reogarth) (type . green) (treasure . food) (age . ancient))
+(xor! (age . ancient) ((type . red) (treasure . gold)))
+
+(go!
+((age . young) (dragon . reogarth) (type . red) (treasure . mundane))
+((age . adult) (dragon . bormis) (type . black) (treasure . food))
+((age . old) (dragon . simish) (type . green) (treasure . gems))
+((age . ancient) (dragon . etorniris) (type . blue) (treasure . gold))
+)

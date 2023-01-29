@@ -96,7 +96,8 @@
 (define (make-header #:orient (orient 'side) cat)
   (define cvs (cons cat (? cat)))
   (define cat-img (hash-ref grid-images (car cvs)))
-  (define props-img (apply above (for/list ([c (rest cvs)])
+  (define props-img (apply above empty-image
+                           (for/list ([c (rest cvs)])
                                    (hash-ref grid-images c))))
   (define header
     (if (eq? orient 'side)
@@ -122,9 +123,10 @@
   (define box-images
     (for/list ([row boxes])
       (apply beside
+             empty-image
              (map (λ (v) (hash-ref grid-images v))
                   row))))
-  (define sub-grid (apply above box-images))
+  (define sub-grid (apply above empty-image box-images))
   (color-frame/pixels SUB-GRID-COLOR 
    (overlay (square (image-width sub-grid) 'outline SUB-GRID-COLOR)
            sub-grid)
@@ -142,6 +144,7 @@
 
   (define boxes-img
     (apply above/align "left"
+           empty-image
            (for/list ([row rows]
                       [side sides])
      
@@ -154,10 +157,12 @@
              img)))
   (define side-img
     (apply above
+           empty-image
            (for/list ([side sides])
              (make-header side))))
   (define top-img
     (apply beside
+           empty-image
            (for/list ([top tops])
              (make-header top #:orient 'top))))
   (define outer-sqr (square (image-width side-img) 'outline FRAME-COLOR))

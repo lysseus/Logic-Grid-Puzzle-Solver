@@ -4,7 +4,7 @@
 ;;; SOLVER BASE
 ;;;
 
-(provide init
+(provide (all-from-out "init.rkt")
          (all-from-out "queries.rkt")
          (all-from-out "statements.rkt"))
 
