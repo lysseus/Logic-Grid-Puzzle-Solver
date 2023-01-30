@@ -38,8 +38,8 @@
 (define EVT-LOAD    "l")
 (define EVT-CMD     " ")
 
-(define data-file "data.txt")
-(define log-file "log.txt")
+(define data-file "lgps-data.txt")
+(define log-file "lgps-log.txt")
 
 (define debug? (make-parameter #f))
 (define (debug-printf . args)
