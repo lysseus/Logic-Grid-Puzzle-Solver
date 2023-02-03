@@ -30,6 +30,7 @@
                  [else (format "[~a] " stmt#)])
                (apply format vs)))  
   (if (false? (current-log))
+      ;; Print the string to default output.
       (printf "~a~%" str)
       (displayln str (current-log)))
   (prev-stmt# stmt#))

@@ -57,13 +57,14 @@
     (close-output-port (current-log))
     (current-log #f)))
 
-(define (add-to-tmp ws state kval)  
+(define (add-key-tmp ws state kval)  
   (set-bld-world-key-tmp! ws (string-append (bld-world-key-tmp ws) kval)))
 
-(define (rem-from-tmp ws state kval) 
+(define (rem-key-tmp ws state kval) 
   (define str (bld-world-key-tmp ws))
   (define len (string-length str))
-  (set-bld-world-key-tmp! ws (substring str 0 (sub1 len))))
+  (unless (zero? len)
+    (set-bld-world-key-tmp! ws (substring str 0 (sub1 len)))))
 
 (define (add-key-val ws state kval)
   (define val (string->expr (bld-world-key-tmp ws)))
@@ -226,6 +227,11 @@
      (string-replace val (first args) (second args)))
    ")"))
 
+(define (rem-stmt-tmp ws state kval) 
+  (define vals (bld-world-stmt-tmp ws))
+  (unless (empty? vals)
+    (set-bld-world-stmt-tmp! ws (drop-right vals 1))))
+
 (define (string->stmt str)
   (define vals '(("[(" "((") (")]" "))") (" : " " . ")))
   (for/fold ([val (~a str)])
@@ -374,6 +380,11 @@
   (set-bld-world-key! ws 'Menu)
   (set-bld-world-exp?! ws #t)
   (clear-key-flds! ws state kval))
+
+(define (rem-exp-tmp ws state kval) 
+  (define vals (bld-world-exp-tmp ws))
+  (unless (empty? vals)
+    (set-bld-world-exp-tmp! ws (drop-right vals 1))))
 
 (define (exp->string #:colon? (colon? #f) val)
   (define str (~a val))
@@ -551,19 +562,20 @@
 (define (read-file ws state kval)
   (debug-printf "read-file ~a ~a~%" state kval)
   (define tbl (bld-world-tbl ws))
-  (define in (open-input-file data-file #:mode 'text))
-  (define stmts
-    (reverse (for/fold ([stmts empty])
-                       ([v (range 20)])
-               (define val (read in))
-               (debug-printf "~a~%" val)
-               #:break (eof-object? val)
-               (case (car val)
-                 [(init) (load-init tbl (rest val)) stmts]
-                 [(go!) (load-exp tbl (rest val)) stmts]
-                 [else (cons val stmts)]))))
-  (load-stmts tbl stmts)
-  (close-input-port in))
+  (with-handlers ([exn:fail:filesystem:errno? (λ (e) (printf "~a~%Loading bypassed.~%" (exn-message e)))])
+    (define in (open-input-file data-file #:mode 'text))
+    (define stmts
+      (reverse (for/fold ([stmts empty])
+                         ([v (range 20)])
+                 (define val (read in))
+                 (debug-printf "~a~%" val)
+                 #:break (eof-object? val)
+                 (case (car val)
+                   [(init) (load-init tbl (rest val)) stmts]
+                   [(go!) (load-exp tbl (rest val)) stmts]
+                   [else (cons val stmts)]))))
+    (load-stmts tbl stmts)
+    (close-input-port in)))
 
 (define (process-cmd ws state kval)
   (unless (and (zero? (size-active pending))
@@ -592,12 +604,12 @@
     (edit EVT-EXP        beg-exp        exp input))
 
    (cat
-    (input EVT-DEL        rem-from-tmp       cat input)
+    (input EVT-DEL        rem-key-tmp        cat input)
     (input EVT-ENTER      add-key-val        cat input)
     (input EVT-ESC        #F                 cat edit)
-    (input string?        add-to-tmp         cat input)
+    (input string?        add-key-tmp        cat input)
     (input EVT-STMT       beg-stmt           stmt input)
-    (input EVT-EXP       beg-exp           exp input)
+    (input EVT-EXP       beg-exp             exp input)
 
     (edit EVT-ADD         clear-key-flds!    cat input)
     (edit EVT-DEL         rem-key-val        cat edit)
@@ -613,6 +625,7 @@
     (edit string->number  sel-key#           cat edit))
    
    (stmt
+    (input EVT-DEL        rem-stmt-tmp       stmt input)
     (input EVT-ENTER       add-stmt-val      stmt edit)
     (input EVT-MENU         beg-menu         menu edit)
     (input EVT-EXP         beg-exp         exp input)
@@ -630,10 +643,11 @@
     (edit string->number   sel-stmt#         stmt edit))
 
    (exp
+    (input EVT-DEL         rem-exp-tmp       exp input)
     (input EVT-ENTER       add-exp-val       exp edit)
-    (input EVT-MENU         beg-menu          menu edit)
-    (input EVT-STMT         beg-stmt          stmt edit)
-    (input EVT-ESC          clear-exp-flds!  exp edit)
+    (input EVT-MENU        beg-menu          menu edit)
+    (input EVT-STMT        beg-stmt          stmt edit)
+    (input EVT-ESC         clear-exp-flds!  exp edit)
 
     (edit EVT-ADD          clear-exp-flds!  exp input)
     (edit EVT-DEL          rem-exp-val      exp edit)
