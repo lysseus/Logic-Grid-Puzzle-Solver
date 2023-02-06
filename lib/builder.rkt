@@ -248,7 +248,7 @@
        [else (raise-user-error "Invalid statement syntax.")])]
     [(|relate! #f|)
      (case len
-       [(2) (cons oper args)]
+       [(2) (append (string->expr (format "(~a)" oper)) args)]
        [else (raise-user-error "Invalid statement syntax.")])]
     [(distinct!) (cons oper args)]
     [(xor!)
@@ -539,7 +539,7 @@
                                      (first (cdr stmt))
                                      (second (cdr stmt)))]
              [(seq!) (append (list #f λseq!) (cdr stmt))]
-             [else (error (format "~a not a valid form." stmt))])))
+             [else (error (format "~a: ~a not a valid form." (car stmt) (cdr stmt)))])))
   ;; Initialize command tries for pending commands.
   (initialize-cmd-tries)
   ;; Populate the exp for validation.  
