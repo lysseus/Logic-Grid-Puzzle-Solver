@@ -13,11 +13,12 @@
          utils/cmd-queue
          utils/2htdp/text
          utils/2htdp/image
+         (only-in "../common.rkt" TITLE-COLOR MSG-FRAME-H MSG-FRAME-W PIXELS)
          "../clauses.rkt"
          "grid.rkt"
          "table.rkt")
 
-(struct slv-world (count)
+(struct slv-world (count message)
   #:mutable #:transparent)
 
 (define (key-handler ws ke)
@@ -62,6 +63,7 @@
 (define FRAME (rectangle FRAME-W FRAME-H 'outline 'white))
 (define STMT-FRAME-W (- FRAME-W 10))
 (define STMT-FRAME (rectangle STMT-FRAME-W FRAME-H 'solid 'transparent))
+(define MSG-FRAME (rectangle MSG-FRAME-W MSG-FRAME-H 'solid 'blue))
 
 (define S#-IMG (overlay (text "STMT#" (quotient FONT-SIZE 3) FONT-COLOR)
                         (square FRAME-H 'outline FONT-COLOR)))
@@ -166,12 +168,23 @@
   (pad-image table MT-PAD))
 
 (define (draw-slv-world ws)
-  (beside/align "top"                
-                (draw-grid ws)
-                DIVIDER
-                (above
-                 (draw-processing-window ws)
-                 (draw-table ws))))
+  (overlay(draw-message ws)
+          (beside/align "top"                
+                        (draw-grid ws)
+                        DIVIDER
+                        (above
+                         (draw-processing-window ws)
+                         (draw-table ws)))))
+
+(define (draw-message ws)
+  (cond
+    [(false? (slv-world-message ws)) empty-image]
+    [else (color-frame/pixels TITLE-COLOR
+                              (overlay/fit #:expand? #f
+                                           #:w-pad PIXELS
+                                           (text (slv-world-message ws) (* 2 FONT-SIZE) TITLE-COLOR)
+                                           MSG-FRAME)
+                              (* 2 PIXELS))]))
 
 (define (render ws)
   (place-image/fit (draw-slv-world ws) MT))

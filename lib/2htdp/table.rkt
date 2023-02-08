@@ -4,7 +4,7 @@
 ;;; TABLE
 ;;;
 
-(provide build-table-images show-table current-expected)
+(provide build-table-images show-table current-expected puzzle-complete?)
 
 (require (for-syntax syntax/parse)
          2htdp/image
@@ -67,7 +67,7 @@
                           (cons (cons prop (for/list ([cat (remove last-cat cats)])
                                                  (?true key cat)))
                                 rows))))
-  (debug-printf "rows=~a~%" rows)
+  (printf "rows=~a~%" rows)
   (define header (beside (apply beside
                                 (map (λ (v) (hash-ref table-images v))
                                      (cons last-cat top-cats)))
@@ -115,3 +115,17 @@
         [else         
          (define order (cons (last cats) (take cats (sub1 (length cats)))))
          (equal? row (f (cons (car order) (car row)) order ans))]))
+
+(define (puzzle-complete? ws cats)
+  (define last-cat (last cats))
+  (define top-cats (remove last-cat cats))
+  (define keys (for/list ([p (? last-cat)])
+                 (cons last-cat p)))
+  (define rows (reverse (for/fold ([rows empty])
+                                  ([key keys])
+                          (define prop (cdr key))
+                          (cons (cons prop (for/list ([cat (remove last-cat cats)])
+                                             (?true key cat)))
+                                rows))))
+  (for/and ([row rows])
+    (andmap (compose not false?) row)))

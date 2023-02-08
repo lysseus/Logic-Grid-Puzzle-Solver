@@ -33,6 +33,9 @@
 
 (define FONT-SIZE 24)
 
+(define MSG-FRAME-W (* 36 FONT-SIZE))
+(define MSG-FRAME-H (* 2 FONT-SIZE))
+
 (define FRAME-W-PAD 8)
 (define FRAME-H-PAD 8)
 (define PIXELS 4)

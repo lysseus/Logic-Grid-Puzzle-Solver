@@ -11,14 +11,14 @@
          utils/stack
          utils/cmd-queue
          utils/2htdp/image
-         (only-in "2htdp/table.rkt" current-expected)
+         (only-in "2htdp/table.rkt" current-expected puzzle-complete?)
          "solver-base.rkt"
          "2htdp/pending-stream.rkt"
          "common.rkt")
 
 (struct bld-world slv-world (state key-tmp key keys key#
-                                   stmt-tmp stmt#-tmp stmt# stmt-error stmt-scr-top
-                                   exp-tmp exp# exp-error exp? tbl)
+                                   stmt-tmp stmt#-tmp stmt# stmt-scr-top
+                                   exp-tmp exp# exp? tbl)
   #:mutable #:transparent)
 
 (define EVT-DEL     "\b")
@@ -202,7 +202,8 @@
 
 (define (clear-key-flds! ws state kval)
   (set-bld-world-key-tmp! ws "")
-  (set-bld-world-key#! ws #f))
+  (set-bld-world-key#! ws #f)
+  (set-slv-world-message! ws #f))
 
 ;;;
 ;;; STMT
@@ -269,8 +270,8 @@
     [else (raise-user-error "Statement invalid syntax.")]))
 
 (define (add-stmt-val ws state kval)
-  (with-handlers ([exn:fail? (λ (e) (set-bld-world-stmt-error! ws (exn-message e))
-                               (raise 'input))])
+  (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
+                               (raise '(stmt . error)))])
     (define tmp (apply normalize-statement (bld-world-stmt-tmp ws)))
     (define val tmp)
     (define vals (hash-ref (bld-world-tbl ws) 'Statement))
@@ -369,7 +370,7 @@
   (set-bld-world-stmt-tmp! ws '())
   (set-bld-world-stmt#! ws #f)
   (set-bld-world-stmt#-tmp! ws "")
-  (set-bld-world-stmt-error! ws #f))
+  (set-slv-world-message! ws #f))
 
 ;;;
 ;;; exp
@@ -404,8 +405,8 @@
 
 (define (add-exp-val ws state kval)
   (define key 'Expected)
-  (with-handlers ([exn:fail? (λ (e) (set-bld-world-exp-error! ws (exn-message e))
-                               (raise 'input))])
+  (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
+                               (raise '(exp . error)))])
     (define tmp (apply normalize-Expected (bld-world-exp-tmp ws)))
     (define val tmp)
     (define vals (hash-ref (bld-world-tbl ws) key))
@@ -487,6 +488,9 @@
 ;;;
 
 (define (beg-solve ws state kval)
+  (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
+                               (raise '(menu . error)))])
+    (validate-puzzle ws state kval))
   ;; Create the init values for the solver table.
   (define out (open-output-file data-file #:exists 'replace))
   (displayln "" out)
@@ -547,6 +551,29 @@
   ;; Open the log file.
   (current-log (open-output-file log-file #:exists 'replace)))
 
+(define (validate-puzzle ws state kval)
+  (printf "validate-puzzle ~a ~a~%" state kval)
+  (define tbl (bld-world-tbl ws))
+  (printf "tbl=~a~%" tbl)
+  (define cats (hash-ref tbl 'Category))
+  (printf "cats=~a~%" cats)
+  (cond
+    [(empty? cats)
+     (error "Categories and properties not populated.")]
+    [(< (length cats) 2)
+     (error "Puzzles require 2 or more categories.")]
+    [else
+     (for/fold ([prev-cat #f]
+                [prev-len 0])
+               ([c cats])
+       (define len (length (hash-ref tbl c)))
+       (cond
+         [(zero? len) (error (format "Cateroy ~a has no properties." c))]
+         [(zero? prev-len) (values c len)]
+         [(< len prev-len) (error (format "Cateroy ~a has  less properties than ~a." c prev-cat))]
+         [(> len prev-len) (error (format "Cateroy ~a has  more properties than ~a." c prev-cat))]
+         [else (values c len)]))]))
+
 (define (load-init tbl inits)
   (debug-printf "load-init~%")
   (hash-set! tbl 'Category (map car inits))
@@ -581,18 +608,26 @@
   (unless (and (zero? (size-active pending))
                (zero? (size-active failed)))
     (stream-pending)
-    (set-slv-world-count! ws (add1 (slv-world-count ws)))))
+    (set-slv-world-count! ws (add1 (slv-world-count ws)))
+    (when (puzzle-complete? ws (? 'cs))
+        (set-slv-world-message! ws "Woot! Puzzle completed!")
+      (raise '(solve . msg)))))
+
+(define (clear-solve-flds! ws state kval)  
+  (set-slv-world-message! ws #f))
 
 (define STATES
   (states-hash
    (menu
-    (edit EVT-RIGHT       push-key        menu edit)
-    (edit EVT-STMT        beg-stmt        stmt input)
-    (edit EVT-EXP        beg-exp        exp input)
-    (edit EVT-ESC         #F              stmt input)
-    (edit EVT-RUN         beg-solve       solve edit)
-    (edit EVT-LOAD        read-file       menu edit)
-    (edit string->number  sel-key#        menu edit))
+    (edit EVT-RIGHT       push-key         menu edit)
+    (edit EVT-STMT        beg-stmt         stmt input)
+    (edit EVT-EXP        beg-exp           exp input)
+    (edit EVT-ESC         #F               stmt input)
+    (edit EVT-RUN         beg-solve        solve edit)
+    (edit EVT-LOAD        read-file        menu edit)
+    (edit string->number  sel-key#         menu edit)
+
+    (error EVT-ESC         clear-key-flds! menu edit))
 
    (oper    
     (edit EVT-ESC         clear-key-flds! oper edit)
@@ -640,7 +675,9 @@
     (edit EVT-ESC          clear-stmt-flds!  stmt edit)
     (edit EVT-LEFT         toggle-exp?      stmt edit)
     (edit EVT-RIGHT        toggle-exp?      stmt edit)
-    (edit string->number   sel-stmt#         stmt edit))
+    (edit string->number   sel-stmt#         stmt edit)
+
+    (error EVT-ESC         clear-stmt-flds!  stmt input))
 
    (exp
     (input EVT-DEL         rem-exp-tmp       exp input)
@@ -658,11 +695,15 @@
     (edit EVT-ESC          clear-exp-flds!  exp edit)
     (edit EVT-LEFT         toggle-exp?      exp edit)
     (edit EVT-RIGHT        toggle-exp?      exp edit)
-    (edit string->number   sel-exp#         exp edit))
+    (edit string->number   sel-exp#         exp edit)
+
+    (error EVT-ESC         clear-exp-flds!  exp edit))
 
    (solve    
     (edit EVT-CMD          process-cmd       solve edit)
-    (edit EVT-MENU         beg-menu          menu edit))))
+    (edit EVT-MENU         beg-menu          menu edit)
+
+    (msg  EVT-ESC         clear-solve-flds!  solve edit))))
 
 ;; Translate numpad values into equivalent non-numpad values. 
 (define (key-normalize state ke)
@@ -698,6 +739,7 @@
                                    'solid 'transparent))
 (define REV-KEY-FRAME (rectangle KEY-FRAME-W KEY-FRAME-H 'solid HILITE-COLOR))
 (define STMT-FRAME (rectangle STMT-FRAME-W STMT-FRAME-H 'solid 'transparent))
+(define MESSAGE-FRAME (rectangle STMT-FRAME-W STMT-FRAME-H 'solid 'darkred))
 (define REV-STMT-FRAME (rectangle STMT-FRAME-W STMT-FRAME-H 'solid HILITE-COLOR))
 
 (define (draw-key-tmp ws)
@@ -878,24 +920,14 @@
                                        STMT-FRAME))
                       PIXELS))
 
-(define (draw-stmt-error ws)
+(define (draw-message ws)
   (cond
-    [(false? (bld-world-stmt-error ws)) empty-image]
+    [(false? (slv-world-message ws)) empty-image]
     [else (color-frame/pixels TITLE-COLOR
                               (overlay/fit #:expand? #f
                                            #:w-pad PIXELS
-                                           (text (bld-world-stmt-error ws) FONT-SIZE TITLE-COLOR)
-                                           STMT-FRAME)
-                              PIXELS)]))
-
-(define (draw-exp-error ws)
-  (cond
-    [(false? (bld-world-exp-error ws)) empty-image]
-    [else (color-frame/pixels TITLE-COLOR
-                              (overlay/fit #:expand? #f
-                                           #:w-pad PIXELS
-                                           (text (bld-world-exp-error ws) FONT-SIZE TITLE-COLOR)
-                                           STMT-FRAME)
+                                           (text (slv-world-message ws) FONT-SIZE TITLE-COLOR)
+                                           MESSAGE-FRAME)
                               PIXELS)]))
 
 (define (draw-key-menu ws)
@@ -904,21 +936,20 @@
 
 (define (draw-stmt-menu ws)
   (above (draw-stmt ws)
-         (draw-stmt-vals ws)
-         (draw-stmt-error ws)))
+         (draw-stmt-vals ws)))
 
 (define (draw-exp-menu ws)
   (above (draw-exp ws)
-         (draw-exp-vals ws)
-         (draw-exp-error ws)))
+         (draw-exp-vals ws)))
 
 (define (draw-bld-world ws)
-  (beside/align "top"                                
-                (draw-key-menu ws)
-                MT-SEP
-                (if (false? (bld-world-exp? ws))
-                    (draw-stmt-menu ws)
-                    (draw-exp-menu ws))))
+  (overlay (draw-message ws)
+           (beside/align "top"                                
+                         (draw-key-menu ws)
+                         MT-SEP
+                         (if (false? (bld-world-exp? ws))
+                             (draw-stmt-menu ws)
+                             (draw-exp-menu ws)))))
 
 (define (draw-world ws)
   (debug-printf "ws=~a~%" ws)
@@ -927,10 +958,7 @@
       (draw-bld-world ws)))
 
 (define (render ws)
-  (overlay/fit (draw-world ws) MT)
-  #;(place-image/align (draw-world ws)
-                       0 0 "left" "top"
-                       MT))
+  (overlay/fit (draw-world ws) MT))
 
 (define (new-world)
   (define tbl (make-hash '((Category)
@@ -938,11 +966,10 @@
                            (Expected)
                            (Menu Operator Category)                           
                            (Operator relate! |relate! #f| distinct! xor! criss-cross! seq!))))
-  
-  (bld-world 0
+  (bld-world 0 #f
              (State 'menu 'edit "") "" 'Menu empty #f
-             '() "" #f #f 0
-             '() #f #f #f tbl))
+             '() "" #f 0
+             '() #f #f tbl))
 
 (big-bang (new-world)
   (to-draw render)
