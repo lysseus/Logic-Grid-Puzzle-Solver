@@ -67,7 +67,7 @@
                           (cons (cons prop (for/list ([cat (remove last-cat cats)])
                                                  (?true key cat)))
                                 rows))))
-  (debug-printf "rows=~a~%" rows)
+  (printf "rows=~a~%" rows)
   (define header (beside (apply beside
                                 (map (λ (v) (hash-ref table-images v))
                                      (cons last-cat top-cats)))
