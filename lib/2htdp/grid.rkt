@@ -98,7 +98,7 @@
   (define cat-img (hash-ref grid-images (car cvs)))
   (define props-img (apply above empty-image
                            (for/list ([c (rest cvs)])
-                                   (hash-ref grid-images c))))
+                             (hash-ref grid-images c))))
   (define header
     (if (eq? orient 'side)
         (beside (rotate 90 cat-img)
@@ -106,10 +106,10 @@
         (above cat-img
                (rotate 90 props-img))))
   (color-frame/pixels SUB-GRID-COLOR 
-   (overlay (rectangle (image-width header)
-                      (image-height header) 'outline SUB-GRID-COLOR)
-           header)
-   CAT-FRAME-PIXELS))
+                      (overlay (rectangle (image-width header)
+                                          (image-height header) 'outline SUB-GRID-COLOR)
+                               header)
+                      CAT-FRAME-PIXELS))
 
 ;; Make a sub-grid for the intersection of cattegory properties.
 (define (make-sub-grid cat-name1 cat-name2)
@@ -128,9 +128,9 @@
                   row))))
   (define sub-grid (apply above empty-image box-images))
   (color-frame/pixels SUB-GRID-COLOR 
-   (overlay (square (image-width sub-grid) 'outline SUB-GRID-COLOR)
-           sub-grid)
-   CAT-FRAME-PIXELS))
+                      (overlay (square (image-width sub-grid) 'outline SUB-GRID-COLOR)
+                               sub-grid)
+                      CAT-FRAME-PIXELS))
 
 (define (make-grid inits (blank-txt #f))
   (define cs (? 'cs))

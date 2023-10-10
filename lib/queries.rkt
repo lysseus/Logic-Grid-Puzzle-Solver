@@ -88,3 +88,10 @@
                      ([v (? key category)]
                       [n (in-naturals)])
              (if (false? v) acc (cons n acc)))))
+
+;; Returns a list of indexes along category for key that are unknown.
+(define (?unknown key category)
+  (reverse (for/fold ([acc empty])
+                     ([v (? key category)]
+                      [n (in-naturals)])
+             (if (unknown? v) (cons n acc) acc))))

@@ -264,7 +264,7 @@
                            (Statement)
                            (Expected)
                            (Menu Operator Category)                           
-                           (Operator relate! |relate! #f| distinct! xor! criss-cross! seq!))))
+                           (Operator relate! |relate! #f| distinct! xor! criss-cross! seq! next!))))
   (bld-world 0 #f
              (State 'menu 'edit "") "" 'Menu empty #f
              '() "" #f 0

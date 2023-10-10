@@ -48,11 +48,11 @@
 (define S#-IMG (overlay (text "STMT#" (quotient slv-FONT-SIZE 3) FONT-COLOR)
                         (square FRAME-H 'outline FONT-COLOR)))
 (define REM-IMG (overlay (text "REM" (quotient slv-FONT-SIZE 3) FONT-COLOR)
-                        (square FRAME-H 'outline FONT-COLOR)))
+                         (square FRAME-H 'outline FONT-COLOR)))
 (define PENDING-HDR (beside
                      S#-IMG
                      (overlay (text "PENDING" slv-FONT-SIZE FONT-COLOR)
-                             FRAME)
+                              FRAME)
                      REM-IMG))
 (define FAILED-HDR (beside
                     S#-IMG
@@ -90,8 +90,8 @@
   
   (define-values (stmt-img stmt-dims)
     (text-tok-wrap
-                (format "~a ~a" (~p proc) (~pa args))
-                slv-FONT-SIZE FONT-COLOR STMT-FRAME-W))
+     (format "~a ~a" (~p proc) (~pa args))
+     slv-FONT-SIZE FONT-COLOR STMT-FRAME-W))
   
   (define tries-img
     (overlay
@@ -100,11 +100,11 @@
 
   (define status-frame (rectangle MT-PROCESS-WIDTH FRAME-H 'solid clr))
   (overlay (beside stmt#-img
-          (overlay (overlay/align "left" "center"
-                                  stmt-img
-                                  STMT-FRAME)
-                   FRAME)
-          tries-img)
+                   (overlay (overlay/align "left" "center"
+                                           stmt-img
+                                           STMT-FRAME)
+                            FRAME)
+                   tries-img)
            status-frame))
 
 (define (draw-queue queue queue-hdr)

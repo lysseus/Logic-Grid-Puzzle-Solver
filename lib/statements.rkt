@@ -8,7 +8,8 @@
          distinct!    λdistinct!
          xor!         λxor!
          criss-cross! λcriss-cross!         
-         seq!         λseq!)
+         seq!         λseq!
+         next!        λnext!)
 
 (require (for-syntax syntax/parse)
          utils/cmd-queue
@@ -17,7 +18,7 @@
                   category/c valid-key/c suppress-error debug-printf
                   current-log)
          "clauses.rkt"
-         (only-in "queries.rkt" ? ?= ?-= ?n))
+         (only-in "queries.rkt" ? ?= ?-= ?n ?unknown))
 
 (define prev-stmt# (make-parameter #f))
 (define (log . vs)
@@ -70,7 +71,7 @@
        [(unknown? puzzle-box) (void)]
        [(eq? puzzle-box val) (void)]
        [else (error (format "puzzle-box value ~a differs from val for ~a ~a ~a~%"
-                     puzzle-box key1 key2 val))])
+                            puzzle-box key1 key2 val))])
 
      ;; Check that we have not already marked true along
      ; the category/key row or column. If we have this means
@@ -116,7 +117,7 @@
             [(1? (count unknown? result))
              (define prop2
                (list-ref (? cat2) (vector-member UNKNOWN
-                                                       (list->vector result))))
+                                                 (list->vector result))))
              (λrelate! #t key1 (cons cat2 prop2))]
             [else (void)]))
         (check-assign-true key1 key2)
@@ -127,21 +128,21 @@
 
      ;; When (c1 * c2) is true and (c1 * c3) is true, (c2 * c3) is true.
      (when (true? val)
-        (define (true+true->true key)
-          (debug-printf "true+true->true ~a~%" key)
-          (define trues (?-= key #t))
-          (unless (empty? trues)
-            (for/fold ([key1 (car trues)])
-                      ([key2 (rest trues)])
-              (debug-printf "key1=~a key2=~a~%" key1 key2)
-              ;; If the categories are different and their box-val unknown
-              ;; set their relationship to true.
-              (when (and (not (eq? (car key1) (car key2)))
-                         (unknown? (? key1 key2)))
-                (λrelate! #t key1 key2))
-              key2)))
-        (true+true->true key1)
-        (true+true->true key2))
+       (define (true+true->true key)
+         (debug-printf "true+true->true ~a~%" key)
+         (define trues (?-= key #t))
+         (unless (empty? trues)
+           (for/fold ([key1 (car trues)])
+                     ([key2 (rest trues)])
+             (debug-printf "key1=~a key2=~a~%" key1 key2)
+             ;; If the categories are different and their box-val unknown
+             ;; set their relationship to true.
+             (when (and (not (eq? (car key1) (car key2)))
+                        (unknown? (? key1 key2)))
+               (λrelate! #t key1 key2))
+             key2)))
+       (true+true->true key1)
+       (true+true->true key2))
      
      ;; wWen (c1 * c2) is true and (c1 * c3) is false, (c2 c3) is false.
      (define (true+false->false key)
@@ -292,7 +293,7 @@
 
 (define (λcriss-cross! key1 key2 key3 key4)
   (log "criss-coross-relate ~a ~a ~a ~a~%"
-                key1 key2 key3 key4)
+       key1 key2 key3 key4)
   ;; Set negative relationshiops between 1st pair of props.
   (apply λdistinct! (list key1 key2))
   
@@ -454,6 +455,12 @@
     [(_ key:expr ...)
      #'(add-to-pending #f λseq! (key-clause key) ...)]))
 
+(define-syntax (next! stx)
+  (syntax-parse stx    
+    [(_ category:id key:expr ...)
+     #'(add-to-pending #f λnext! (quote category)
+                       (key-clause key) ...)]))
+
 (define (λseq! . keys)
   (log "seq! ~a~%" keys)
   (cond
@@ -600,11 +607,11 @@
   (define prop2-mark-false-idxs (remove* (append prop2-false-idxs valid-prop2s) prop1-idxs))
   (define prop3-mark-false-idxs (remove* (append prop3-false-idxs valid-prop3s) prop1-idxs))
   (debug-printf "prop2-mark-false-idxs=~a prop3-mark-false-idxs=~a~%"
-          prop2-mark-false-idxs prop3-mark-false-idxs)
+                prop2-mark-false-idxs prop3-mark-false-idxs)
   (define prop2-mark-false-vals (map (λ (n) (list-ref prop1s n)) prop2-mark-false-idxs))
   (define prop3-mark-false-vals (map (λ (n) (list-ref prop1s n)) prop3-mark-false-idxs))
   (debug-printf "prop2-mark-false-vals=~a prop3-mark-false-vals=~a~%"
-          prop2-mark-false-vals prop3-mark-false-vals)
+                prop2-mark-false-vals prop3-mark-false-vals)
    
   (cond
     [(and (= (length valid-prop2s) 1) (= (length valid-prop3s) 1))
@@ -622,3 +629,64 @@
          [else prop3-prop-val]))
      (values #t (list prop2-mark-val prop3-mark-val))]
     [else (values #f (list prop2-mark-false-vals prop3-mark-false-vals))]))
+
+(define (λnext! . keys)
+  (log "nxt! ~a~%" keys)
+  (apply xor-shift! (cons (car keys) 1) (cdr keys)))
+
+(define/contract (xor-shift! category/n key1 key2)
+  (-> key/c key/c key/c any)
+  (debug-printf "xor-shift! ~a ~a~a~%"
+                category/n key1 key2)
+  (define category (car category/n))
+  (define props (? category))
+  
+  ;; Prop1 and prop2 have a negative relationship.
+  (λdistinct! key1 key2)
+
+  ;; Get key1 unknowns
+  (define key1-unknowns (map (λ (n) (list-ref props n))
+                             (?unknown key1 category)))
+  ;; Test shift for key1 key2
+  (define-values (key1-resolved? key1-marks) (shift? category/n key1 key2))  
+  (debug-printf "key1-unknowns=~a~%" key1-unknowns)
+  (debug-printf "key1-resolved?=~a key1-marks=~a~%" key1-resolved? key1-marks)
+
+  ;; Get key2 unknowns
+  (define key2-unknowns
+    (map (λ (n) (list-ref props n)) (?unknown key2 category)))
+  ;; Test key2 key1 shift
+  (define-values (key2-resolved? key2-marks) (shift? category/n key2 key1))  
+  (debug-printf "key2-unknowns=~a~%" key2-unknowns)
+  (debug-printf "key2-resolved?=~a key2-marks=~a~%" key2-resolved? key2-marks)
+   
+  (cond
+    ;; Neither are resolved. Fail the statement.
+    [(and (false? key1-resolved?) (false? key2-resolved?))
+     (raise-user-error "next! ~a ~a ~a unresolved." category/n key1 key2)]
+
+    ;; key1->key2 is resolved, key2->key1 is not. Do key1->key2 shift.
+    [(false? key2-resolved?)
+     (debug-printf "Resolved for key1->key2~%.")      
+     (shift! category/n key1 key2)]
+     
+    ;; key2->key1 is resolved, but key1->key2 is not. Do the shift. 
+    [(false? key1-resolved?)
+     (debug-printf "Resolved for key2->kkey1.~%")
+      
+     (shift! category/n key2 key1)]
+     
+    ;; Both are resolved. Mark boxes to be excluded.
+    [else
+     (debug-printf "Resolved for key1->key2 and key2->key1.~%")
+     (define key1-rems (remove* (append key1-marks key2-marks) key1-unknowns))
+     (debug-printf "key1-rems=~a~%" key1-rems)
+     (define key2-rems (remove* (append key1-marks key2-marks) key2-unknowns))
+     (debug-printf "key2-rems=~a~%" key2-rems)
+     ;; Mark key1 negative relationships.
+     (for ([n key1-rems])
+       (λrelate! #f key1 (cons category n)))
+     ;; Mark key2 negative relationships.
+     (for ([n key2-rems])
+       (λrelate! #f key2 (cons category n)))
+     (raise-user-error "next! ~a ~a ~a unresolved." category/n key1 key2)]))

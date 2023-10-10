@@ -74,7 +74,7 @@
     (set-bld-world-key-tmp! ws (substring str 0 (sub1 len)))))
 
 (define (add-key-val ws state kval)
-  (define val (string->expr (bld-world-key-tmp ws)))
+  (define val (string->expr (string-titlecase (bld-world-key-tmp ws))))
   (define vals (hash-ref (bld-world-tbl ws) (bld-world-key ws)))
   (unless (member val vals)
     (define new-vals (append  vals (list val)))
@@ -223,17 +223,17 @@
   (clear-key-flds! ws state kval))
 
 #;(define (stmt->string #:colon? (colon? #f) val)
-  (define vstr (~a val))
-  (define str (substring vstr 0 (sub1 (string-length vstr))))
-  (define vals (append '(("((" "[(") ("))" ")]"))
-                       (if colon?
-                           '((" . " " : "))
-                           '())))
-  (string-append
-   (for/fold ([val (~a str)])
-             ([args vals])
-     (string-replace val (first args) (second args)))
-   ")"))
+    (define vstr (~a val))
+    (define str (substring vstr 0 (sub1 (string-length vstr))))
+    (define vals (append '(("((" "[(") ("))" ")]"))
+                         (if colon?
+                             '((" . " " : "))
+                             '())))
+    (string-append
+     (for/fold ([val (~a str)])
+               ([args vals])
+       (string-replace val (first args) (second args)))
+     ")"))
 
 (define (rem-stmt-tmp ws state kval) 
   (define vals (bld-world-stmt-tmp ws))
@@ -273,6 +273,9 @@
                   (list (third args) (fourth args)))]
        [else (raise-user-error "Statement invalid syntax.")])]
     [(seq!)
+     (cons oper args)]
+    [(next!)
+     (printf "doing next!~%")
      (cons oper args)]
     [else (raise-user-error "Statement invalid syntax.")]))
 
@@ -550,6 +553,7 @@
                                      (first (cdr stmt))
                                      (second (cdr stmt)))]
              [(seq!) (append (list #f λseq!) (cdr stmt))]
+             [(next!) (append (list #f λnext!) (cdr stmt))]
              [else (error (format "~a: ~a not a valid form." (car stmt) (cdr stmt)))])))
   ;; Initialize command tries for pending commands.
   (initialize-cmd-tries)
@@ -559,11 +563,11 @@
   (current-log (open-output-file log-file #:exists 'replace)))
 
 (define (validate-puzzle ws state kval)
-  (printf "validate-puzzle ~a ~a~%" state kval)
+  (debug-printf "validate-puzzle ~a ~a~%" state kval)
   (define tbl (bld-world-tbl ws))
-  (printf "tbl=~a~%" tbl)
+  (debug-printf "tbl=~a~%" tbl)
   (define cats (hash-ref tbl 'Category))
-  (printf "cats=~a~%" cats)
+  (debug-printf "cats=~a~%" cats)
   (cond
     [(empty? cats)
      (error "Categories and properties not populated.")]
@@ -596,7 +600,8 @@
 (define (read-file ws state kval)
   (debug-printf "read-file ~a ~a~%" state kval)
   (define tbl (bld-world-tbl ws))
-  (with-handlers ([exn:fail:filesystem:errno? (λ (e) (printf "~a~%Loading bypassed.~%" (exn-message e)))])
+  (with-handlers ([exn:fail:filesystem:errno?
+                   (λ (e) (printf "~a~%Loading bypassed.~%" (exn-message e)))])
     (define in (open-input-file data-file #:mode 'text))
     (define stmts
       (reverse (for/fold ([stmts empty])
