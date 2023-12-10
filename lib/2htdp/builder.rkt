@@ -100,7 +100,7 @@
                       (overlay/fit
                        #:expand? #f
                        #:w-pad PIXELS
-                       (text (~a val) FONT-SIZE FONT-COLOR)
+                       (text (string-trim (~a val) "%") FONT-SIZE FONT-COLOR)
                        (rectangle (- KEY-FRAME-W KEY-FRAME-H PIXELS) KEY-FRAME-H 'solid 'transparent))
                       PIXELS))
 
@@ -148,7 +148,7 @@
   (debug-printf "draw-stmt-vals ~a~%" (bld-world-state ws))
   (define id (State-id (bld-world-state ws)))
   (define task-id (State-task-id (bld-world-state ws)))
-  (define stmts (hash-ref (bld-world-tbl ws) 'Statement))
+  (define stmts (hash-ref (bld-world-tbl ws) '%Statement))
   (define vals (take (drop stmts (bld-world-stmt-scr-top ws))
                      (min (- (length stmts) (bld-world-stmt-scr-top ws))
                           STMT-SCR-MAX)))
@@ -173,7 +173,7 @@
   (define id (State-id (bld-world-state ws)))
   (define task-id (State-task-id (bld-world-state ws)))
   (define txts
-    (for/list ([val (hash-ref (bld-world-tbl ws) 'Expected)]
+    (for/list ([val (hash-ref (bld-world-tbl ws) '%Expected)]
                [n (in-naturals 1)])
       (beside (draw-num ws n (bld-world-exp# ws)) (draw-exp-val ws val))))
   (define imgs
@@ -192,7 +192,8 @@
   (color-frame/pixels TITLE-COLOR
                       (overlay/fit #:expand? #f
                                    #:w-pad PIXELS
-                                   (text (~a (bld-world-key ws)) FONT-SIZE TITLE-COLOR)
+                                   (text (string-trim (~a (bld-world-key ws)) "%")
+                                         FONT-SIZE TITLE-COLOR)
                                    (if (or (eq? (State-id (bld-world-state ws)) 'stmt)
                                            (eq? (State-id (bld-world-state ws)) 'exp))
                                        KEY-FRAME
@@ -260,13 +261,13 @@
   (overlay/fit (draw-world ws) MT))
 
 (define (new-world)
-  (define tbl (make-hash '((Category)
-                           (Statement)
-                           (Expected)
-                           (Menu Operator Category)                           
-                           (Operator relate! |relate! #f| distinct! xor! criss-cross! seq! next!))))
+  (define tbl (make-hash '((%Category)
+                           (%Statement)
+                           (%Expected)
+                           (%Main %Operator %Category)                           
+                           (%Operator relate! distinct! xor! criss-cross! seq! next!))))
   (bld-world 0 #f
-             (State 'menu 'edit "") "" 'Menu empty #f
+             (State 'main 'edit "") "" '%Main empty #f
              '() "" #f 0
              '() #f #f tbl))
 
@@ -274,4 +275,4 @@
   (big-bang (new-world)
     (to-draw render)
     (on-key key-handler)
-    (name "Logic Grid Puzzle Builder")))
+    (name "Logic Grid Puzzle Solver")))

@@ -194,7 +194,7 @@
      #'(add-to-pending 1 λdistinct! (key-clause key) ...)]))
 
 (define (λdistinct! . keys)
-  (log "distinct ~a~%" keys)
+  (log "distinct! ~a~%" keys)
   (define (assign-false keys)
     (for* ([key1 keys]
            [key2 (remove key1 keys)])
@@ -206,7 +206,7 @@
 ;;; XOR
 ;;;
 
-;; xor: Compares the puzzle value at s1 with the puzzle
+;; xor!: Compares the puzzle value at s1 with the puzzle
 ;; value at s2.
 (define-syntax (xor! stx)
   (syntax-parse stx
@@ -292,7 +292,7 @@
                        (key-clause k4))]))
 
 (define (λcriss-cross! key1 key2 key3 key4)
-  (log "criss-coross-relate ~a ~a ~a ~a~%"
+  (log "criss-coross! ~a ~a ~a ~a~%"
        key1 key2 key3 key4)
   ;; Set negative relationshiops between 1st pair of props.
   (apply λdistinct! (list key1 key2))
@@ -631,7 +631,7 @@
     [else (values #f (list prop2-mark-false-vals prop3-mark-false-vals))]))
 
 (define (λnext! . keys)
-  (log "nxt! ~a~%" keys)
+  (log "next! ~a~%" keys)
   (apply xor-shift! (cons (car keys) 1) (cdr keys)))
 
 (define/contract (xor-shift! category/n key1 key2)

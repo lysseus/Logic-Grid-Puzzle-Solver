@@ -79,8 +79,10 @@
 
   (define (make-box-image v c)
     (define img (text (~a v) FONT-SIZE c))
-    (define f (min (/ (image-width img) prop-frame-h)
-                   (/ (image-height img) prop-frame-h)))
+
+    ;; Scale image to 95% of box dimensions.
+    (define f 0.95)
+    
     (overlay
      (scale f img)
      (square prop-frame-h 'outline FRAME-COLOR)))

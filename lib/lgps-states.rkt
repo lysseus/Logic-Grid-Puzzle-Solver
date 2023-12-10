@@ -24,7 +24,7 @@
 (define EVT-LEFT    "left")
 (define EVT-RIGHT   "right")
 (define EVT-ESC     "escape")
-(define EVT-MENU    "m")
+(define EVT-MAIN    "m")
 (define EVT-STMT    "s")
 (define EVT-EXP     "e")
 (define EVT-RUN     "r")
@@ -42,6 +42,7 @@
     (cond
       [(string=? ke "numpad-enter") EVT-ENTER]
       [(and (or (eq? id 'cat) (eq? id 'prop)) (eq? task-id 'input) (string=? ke " ")) "-"]
+      [(member ke '("lshift" "rshift" "control" "rcontrol" "end" "next" "home" "prior")) ""]
       [else (string-trim (string-downcase ke) "numpad")]))  
   kval)
 
@@ -53,13 +54,12 @@
   (unless (false? (debug?)) (apply printf args)))
 
 ;;;
-;;;; MENU
+;;;; MAIN
 ;;;;
 
-(define (beg-menu ws state kval)
-  (debug-printf "beg-menu state=~a kval=~a~%" state kval)
-  (set-bld-world-key! ws 'Menu)
-  (clear-stmt-flds! ws state kval)
+(define (beg-main ws state kval)
+  (debug-printf "beg-main state=~a kval=~a~%" state kval)
+  (set-bld-world-key! ws '%Main)  
   (unless (false? (current-log))
     (close-output-port (current-log))
     (current-log #f)))
@@ -107,7 +107,7 @@
     (define val (list-ref vals (sub1 n)))
     (debug-printf "val=~a~%" val)
     (define ans (case key
-                  [(Operator Category) val]
+                  [(%Operator %Category) val]
                   [else (cons key val)]))
     (if (false? (bld-world-exp? ws))
         (set-bld-world-stmt-tmp! ws (append (bld-world-stmt-tmp ws) (list ans)))
@@ -124,7 +124,7 @@
     (define val (list-ref vals (sub1 n)))
     (debug-printf "val=~a~%" val)
     (define ans (case key
-                  [(Operator Category) val]
+                  [(%Operator %Category) val]
                   [else (cons key n)]))
     (set-bld-world-stmt-tmp! ws (append (bld-world-stmt-tmp ws) (list ans)))
     (clear-key-flds! ws state kval)))
@@ -177,16 +177,16 @@
     (define vals (hash-ref (bld-world-tbl ws) curr))
     (define next (list-ref vals (sub1 n)))
     (define id (case next
-                 [(Category) 'cat]
-                 [(Operator) 'oper]
+                 [(%Category) 'cat]
+                 [(%Operator) 'oper]
                  [else (State-id state)]))
-    (define task-id (if (eq? curr 'Category) 'input 'edit))
+    (define task-id 'edit)    
     (debug-printf "curr=~a next=~a id=~a task-id=~a~%" curr next id task-id)
     (case curr
-      [(Menu)
+      [(%Main)
        (set-bld-world-key! ws next)
        (set-bld-world-keys! ws (cons curr (bld-world-keys ws)))]
-      [(Category)
+      [(%Category)
        (set-bld-world-key! ws next)
        (set-bld-world-keys! ws (cons curr (bld-world-keys ws)))]
       [else (void)])
@@ -201,9 +201,9 @@
     (set-bld-world-keys! ws (cdr keys))
     (clear-key-flds! ws state kval)
     (define id (case key
-                 [(Category) 'cat]
-                 [(Operator) 'oper]
-                 [else 'menu]))
+                 [(%Category) 'cat]
+                 [(%Operator) 'oper]
+                 [else 'main]))
     (debug-printf "id=~a~%" id)
     (raise (cons id 'edit))))
 
@@ -218,22 +218,9 @@
 
 (define (beg-stmt ws state kval)
   (debug-printf "beg-stmt state=~a kval=~a~%" state kval)
-  (set-bld-world-key! ws 'Menu)
+  (set-bld-world-key! ws '%Main)
   (set-bld-world-exp?! ws #f)
   (clear-key-flds! ws state kval))
-
-#;(define (stmt->string #:colon? (colon? #f) val)
-    (define vstr (~a val))
-    (define str (substring vstr 0 (sub1 (string-length vstr))))
-    (define vals (append '(("((" "[(") ("))" ")]"))
-                         (if colon?
-                             '((" . " " : "))
-                             '())))
-    (string-append
-     (for/fold ([val (~a str)])
-               ([args vals])
-       (string-replace val (first args) (second args)))
-     ")"))
 
 (define (rem-stmt-tmp ws state kval) 
   (define vals (bld-world-stmt-tmp ws))
@@ -246,48 +233,258 @@
             ([args vals])
     (string-replace val (first args) (second args))))
 
+;; Returns true if the value is a valid statment category/property pair.
+;; Otherise returns false.
+(define (category/property-pair? v)
+  (and (pair? v)
+       (not (list? v))
+       (symbol? (car v))
+       (or (symbol? (cdr v)) (number? (cdr v)))))
+
+;; Returns true if the value is a valid statment category/offset pair.
+;; Otherwise returns false.
+(define (category/offset-pair? v)
+  (and (pair? v)
+       (not (list? v))
+       (symbol? (car v))
+       (natural? (cdr v))))
+
+
+(define OPERATOR-ERROR "Operator not valid.")
+(define ARGUMENT-NUMBER-ERROR "Wrong number of arguments for this operator.")
+(define ARGUMENT-TYPE-ERROR "Arguments must be category/property pairs.")
+(define ARGUMENT-FIRST-TYPE-ERROR "1st argument must be a sequence-category or sequence-category/offset pair.")
+(define ARGUMENT-FIRST-CATEGORY-ERROR "1st argument must be a sequence-category.")
+(define ARGUMENT-REST-TYPE-ERROR "Arguments after 1st must be category/property pairs.")
+(define ARGUMENT-DUPLICATE-ERROR "Agument duplicates.")
+(define CATEGORY-PROPERTY-ILLOGICAL-ERROR "Illogical duplicate category/property pairs.")
+(define CLAUSE-SET-DUPLICATE-ERROR "Clause sets are duplicates.")
+(define CLAUSE-SET-CATEGORY-DUPLICATE-ERROR "Clause sets catagories are duplicates.")
+
+(define CATEGORY-DUPLICATE-ERROR "Category duplicates.")
+(define CATEGORY-MAJORITY-DUPLICATE-ERROR "More than half the categories are duplicates.")
+(define CATEGORY-ALL-DUPLICATE-ERROR "Categories are all duplicates.")
+(define CATEGORY-1+2-DUPLICATE-ERROR "Category 1 and 2 are duplicates.")
+(define CATEGORY-1+3-DUPLICATE-ERROR "Category 1 and 3 are duplicates.")
+(define CATEGORY-3+4-DUPLICATE-ERROR "Category 3 and 4 are duplicates.")
+(define SEQUENCE-CATEGORY-ERROR "Sequence-category found in category/property pairs.")
+
+;; Validates syntactically the new Statement entry before committing it.I
+;; Each operator has its own procedure for validation and formats a succcessful
+;; statment syntax into a list appropriate for its execution function.
 (define (normalize-statement oper . args)
   (debug-printf "normalize-statement ~a ~a~%" oper args)  
   (define len (length args))
   (case oper
-    [(relate!)
-     (case len
-       [(2) (cons oper args)]
-       [else (raise-user-error "Invalid statement syntax.")])]
-    [(|relate! #f|)
-     (case len
-       [(2) (append (string->expr (format "(~a)" oper)) args)]
-       [else (raise-user-error "Invalid statement syntax.")])]
-    [(distinct!) (cons oper args)]
-    [(xor!)
-     (case len
-       [(3) (list oper (first args) (list (second args) (third args)))]
-       [(4) (list oper
-                  (list (first args) (second args))
-                  (list (third args) (fourth args)))]
-       [else (raise-user-error "Statement invalid syntax.")])]
-    [(criss-cross!)
-     (case len
-       [(4) (list oper
-                  (list (first args) (second args))
-                  (list (third args) (fourth args)))]
-       [else (raise-user-error "Statement invalid syntax.")])]
-    [(seq!)
-     (cons oper args)]
-    [(next!)
-     (printf "doing next!~%")
-     (cons oper args)]
-    [else (raise-user-error "Statement invalid syntax.")]))
+    [(relate!)      (normalize-relate! len oper args)]
+    [(|relate! #f|) (normalize-distinct! len oper args)]
+    [(distinct!)    (normalize-distinct! len oper args)]
+    [(xor!)         (normalize-xor! len oper args)]
+    [(criss-cross!) (normalize-criss-cross! len oper args)]
+    [(seq!)         (normalize-seq! len oper args)]
+    [(next!)        (normalize-next! len oper args)]
+    [else (raise-user-error OPERATOR-ERROR)]))
+
+;; Validates the relate! arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-relate! len oper args)
+  (case len
+    [(2)
+     (define cp1 (first args))
+     (define cp2 (second args))
+     (cond       
+       [(and (category/property-pair? cp1) (category/property-pair? cp2))
+        (define cat1 (car cp1))
+        (define cat2 (car cp2))
+        (cond
+          [(eq? cat1 cat2)
+           (raise-user-error CATEGORY-DUPLICATE-ERROR)]
+          [else (cons oper args)])]
+       [else (raise-user-error ARGUMENT-TYPE-ERROR)])]
+    [else (raise-user-error ARGUMENT-NUMBER-ERROR)]))
+
+;; Validates the distinct! arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-distinct! len oper args)
+  (case len
+    [(0 1)
+     (raise-user-error ARGUMENT-NUMBER-ERROR)]
+    [else
+     (define cps? (andmap category/property-pair? args))
+     (define cps (if cps?
+                     (remove-duplicates args)
+                     '()))
+     (define cs (remove-duplicates (map car cps)))
+     (cond
+       ;; Not all category/pairs.
+       [(false? cps?)        
+        (raise-user-error ARGUMENT-TYPE-ERROR)]
+       ;; Found duplicates.
+       [(> (length args) (length cps))
+        (raise-user-error ARGUMENT-DUPLICATE-ERROR)]
+       ;; Categories all the same.
+       [(= (length cs) 1)
+        (raise-user-error CATEGORY-ALL-DUPLICATE-ERROR)]       
+       [else (cons oper args)])]))
+
+(define (normalize-xor! len oper args)
+  (case len
+    ;; A is either B or C.
+    [(3) (normalize-xor!-3 len oper args)]
+    ;; Either A is B or C is D.
+    [(4) (normalize-xor!-4 len oper args)]
+    [else
+     (raise-user-error ARGUMENT-NUMBER-ERROR)]))
+
+;; Validates the xor! 3 arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-xor!-3 len oper args)
+  (define cps? (andmap category/property-pair? args))
+  (define cps (if cps?
+                  (remove-duplicates args)
+                  '()))
+  (define cs-1+2 (if cps?
+                     (remove-duplicates (take (map car cps) 2))
+                     '()))
+  (define cs-1+3 (if cps?
+                     (remove-duplicates (append (take (map car cps) 1)
+                                                (drop (map car cps) 2)))
+                     '()))
+  (cond
+    ;; Not all category/pairs.
+    [(false? cps?)        
+     (raise-user-error ARGUMENT-TYPE-ERROR)]
+    ;; Found duplicates.
+    [(> len (length cps))
+     (raise-user-error ARGUMENT-DUPLICATE-ERROR)]
+    ;; Categories all the same.
+    [(= (length cs-1+2) 1)
+     (raise-user-error CATEGORY-1+2-DUPLICATE-ERROR)]
+    [(= (length cs-1+3) 1)
+     (raise-user-error CATEGORY-1+3-DUPLICATE-ERROR)]
+    [else (list oper (first args) (list (second args) (third args)))]))
+
+;; Validates the xor! 4 arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-xor!-4 len oper args)
+  (define cps? (andmap category/property-pair? args))
+  (define cps (if cps?
+                  args
+                  '()))
+  (define cps-1+2 (if cps?
+                      (take cps 2)
+                      '()))
+  (define cps-3+4 (if cps?
+                      (drop cps 2)
+                      '()))
+  (define cs-1+2 (if cps?
+                     (remove-duplicates (map car cps-1+2))
+                     '()))
+  (define cs-3+4 (if cps?
+                     (remove-duplicates (map car cps-3+4))
+                     '()))
+  (cond
+    ;; Not all category/pairs.
+    [(false? cps?)        
+     (raise-user-error ARGUMENT-TYPE-ERROR)]
+    ;; Found duplicates.
+    [(> len (length cps))
+     (raise-user-error ARGUMENT-DUPLICATE-ERROR)]
+    ;; Categories all the same.
+    [(= (length cs-1+2) 1)
+     (raise-user-error CATEGORY-1+2-DUPLICATE-ERROR)]
+    [(= (length cs-3+4) 1)
+     (raise-user-error CATEGORY-3+4-DUPLICATE-ERROR)]
+    [(empty? (remove* cps-1+2 cps-3+4))
+     (raise-user-error CLAUSE-SET-DUPLICATE-ERROR)]
+    [else (list oper
+                (list (first args) (second args))
+                (list (third args) (fourth args)))]))
+
+;; Validates the criss-cross! arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-criss-cross! len oper args)
+  (case len    
+    [(4) (define (max-category-count cps)
+           (define cs (map car cps))
+           (apply max (for/list ([c cs])
+                        (count (λ (v) (eq? v c)) cs))))
+         (define cps? (andmap category/property-pair? args))         
+         
+         ;; Not all category/pairs.
+         (when (false? cps?)        
+           (raise-user-error ARGUMENT-TYPE-ERROR))
+
+         ;; Look for duplicate arguments.
+         (when (or (< (length (remove-duplicates args))
+                      (length args)))
+           (raise-user-error ARGUMENT-DUPLICATE-ERROR))
+                  
+         ;; Look for duplicate categories.
+         (when (= (max-category-count args) 3)
+           (raise-user-error CLAUSE-SET-CATEGORY-DUPLICATE-ERROR))
+         
+         (list oper
+               (list (first args) (second args))
+               (list (third args) (fourth args)))]
+    [else
+     (raise-user-error ARGUMENT-NUMBER-ERROR)]))
+
+;; Validates the seq! arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-seq! len oper args)
+  (case len
+    [(1 2)
+     (raise-user-error ARGUMENT-NUMBER-ERROR)]
+    [else (cond
+            [(not (or (symbol? (first args)) (category/offset-pair? (first args))))
+             (raise-user-error ARGUMENT-FIRST-TYPE-ERROR)]
+            [(not (andmap category/property-pair? (rest args)))
+             (raise-user-error ARGUMENT-REST-TYPE-ERROR)]                      
+            [(> len (length (remove-duplicates args)))
+             (raise-user-error ARGUMENT-DUPLICATE-ERROR)]
+            [(and (symbol? (first args))
+                  (member (first args) (map car (rest args))))
+             (raise-user-error SEQUENCE-CATEGORY-ERROR)]
+            [(and (category/offset-pair? (first args))
+                  (member (car (first args)) (map car (rest args))))
+             (raise-user-error SEQUENCE-CATEGORY-ERROR)]
+            [else (cons oper args)])]))
+
+;; Validates the next! arguments and returns a list representation
+;; of the statement, or raises an issue if the syntax is invalid for the
+;; operator.
+(define (normalize-next! len oper args)
+  (case len
+    [(3) (cond
+           [(not (symbol? (first args)))
+            (raise-user-error ARGUMENT-FIRST-CATEGORY-ERROR)]
+           [(not (andmap category/property-pair? (rest args)))
+            (raise-user-error ARGUMENT-REST-TYPE-ERROR)]                      
+           [(> len (length (remove-duplicates args)))
+            (raise-user-error ARGUMENT-DUPLICATE-ERROR)]
+           [(and (symbol? (first args))
+                 (member (first args) (map car (rest args))))
+            (raise-user-error SEQUENCE-CATEGORY-ERROR)]           
+           [else (cons oper args)])]
+    [else
+     (raise-user-error ARGUMENT-NUMBER-ERROR)]))
 
 (define (add-stmt-val ws state kval)
   (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
                                (raise '(stmt . error)))])
     (define tmp (apply normalize-statement (bld-world-stmt-tmp ws)))
     (define val tmp)
-    (define vals (hash-ref (bld-world-tbl ws) 'Statement))
+    (define vals (hash-ref (bld-world-tbl ws) '%Statement))
     (unless (member val vals)
       (define new-vals (append  vals (list val)))
-      (hash-set! (bld-world-tbl ws) 'Statement new-vals))
+      (hash-set! (bld-world-tbl ws) '%Statement new-vals))
     (clear-stmt-flds! ws state kval)))
 
 (define (sel-stmt# ws state kval)
@@ -299,7 +496,7 @@
   (debug-printf "stmt#-tmp=~a~%" (bld-world-stmt#-tmp ws))
   (define n (string->number (bld-world-stmt#-tmp ws)))
   (define top (bld-world-stmt-scr-top ws))
-  (define key 'Statement)
+  (define key '%Statement)
   (define len (length (hash-ref (bld-world-tbl ws) key)))
   (define btm (min len  (+ top STMT-SCR-MAX)))
   (define rng (range (add1 top) (add1 btm)))
@@ -317,7 +514,7 @@
 (define (rem-stmt-val ws state kval)
   (define n (bld-world-stmt# ws))  
   (when (number? n)
-    (define key 'Statement)
+    (define key '%Statement)
     (define vals (hash-ref (bld-world-tbl ws) key))
     (define val (list-ref vals (sub1 n)))
     (define new-vals (remove val vals))
@@ -328,7 +525,7 @@
   (define n (bld-world-stmt# ws))
   (cond
     [(number? n)
-     (define key 'Statement)
+     (define key '%Statement)
      (define ls (hash-ref (bld-world-tbl ws) key))
      (define n0 (- n 2))
      (define new-vals
@@ -354,7 +551,7 @@
   (define n (bld-world-stmt# ws))
   (cond
     [(number? n)
-     (define key 'Statement)
+     (define key '%Statement)
      (define ls (hash-ref (bld-world-tbl ws) key))  
      (define n0 (- n 1))
      (define new-vals
@@ -371,7 +568,7 @@
                                   (add1 n)))]
     [else
      (define top (bld-world-stmt-scr-top ws))
-     (define len (length (hash-ref (bld-world-tbl ws) 'Statement)))
+     (define len (length (hash-ref (bld-world-tbl ws) '%Statement)))
      (define n (+ top STMT-SCR-MAX))
      (when (< n len)
        (set-bld-world-stmt-scr-top! ws n))]))
@@ -388,7 +585,7 @@
 
 (define (beg-exp ws state kval)
   (debug-printf "beg-exp state=~a kval=~a~%" state kval)
-  (set-bld-world-key! ws 'Menu)
+  (set-bld-world-key! ws '%Main)
   (set-bld-world-exp?! ws #t)
   (clear-key-flds! ws state kval))
 
@@ -414,7 +611,7 @@
   args)
 
 (define (add-exp-val ws state kval)
-  (define key 'Expected)
+  (define key '%Expected)
   (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
                                (raise '(exp . error)))])
     (define tmp (apply normalize-Expected (bld-world-exp-tmp ws)))
@@ -427,14 +624,14 @@
 
 (define (sel-exp# ws state kval)
   (define n (string->number kval))
-  (define key 'Expected)
+  (define key '%Expected)
   (set-bld-world-exp#! ws
                        (if (< 0 n (add1 (length (hash-ref (bld-world-tbl ws) key)))) n #f)))
 
 (define (rem-exp-val ws state kval)
   (define n (bld-world-exp# ws))  
   (when (number? n)
-    (define key 'Expected)
+    (define key '%Expected)
     (define vals (hash-ref (bld-world-tbl ws) key))
     (define val (list-ref vals (sub1 n)))
     (define new-vals (remove val vals))
@@ -444,7 +641,7 @@
 (define (up-exp-val ws state kval)
   (define n (bld-world-exp# ws))
   (when (number? n)
-    (define key 'Expected)
+    (define key '%Expected)
     (define ls (hash-ref (bld-world-tbl ws) key))
     (define n0 (- n 2))
     (define new-vals
@@ -463,7 +660,7 @@
 (define (down-exp-val ws state kval)
   (define n (bld-world-exp# ws))
   (when (number? n)
-    (define key 'Expected)
+    (define key '%Expected)
     (define ls (hash-ref (bld-world-tbl ws) key))  
     (define n0 (- n 1))
     (define new-vals
@@ -499,14 +696,14 @@
 
 (define (beg-solve ws state kval)
   (with-handlers ([exn:fail? (λ (e) (set-slv-world-message! ws (exn-message e))
-                               (raise '(menu . error)))])
+                               (raise '(main . error)))])
     (validate-puzzle ws state kval))
   ;; Create the init values for the solver table.
   (define out (open-output-file data-file #:exists 'replace))
   (displayln "" out)
   (displayln "(init" out)
   (define inits
-    (for/list ([cat (hash-ref (bld-world-tbl ws) 'Category)])
+    (for/list ([cat (hash-ref (bld-world-tbl ws) '%Category)])
       (define init (cons cat (hash-ref (bld-world-tbl ws) cat)))
       (define str (format "\t~a" init))
       (displayln str out)
@@ -516,14 +713,14 @@
   (displayln "" out)
   ;; Create stmts for the solver.
   (define stmts
-    (for/list ([stmt (hash-ref (bld-world-tbl ws) 'Statement)])
+    (for/list ([stmt (hash-ref (bld-world-tbl ws) '%Statement)])
       (define str (string->stmt stmt))
       (displayln str out)
       stmt))
   (displayln "" out)
   (displayln "(go!" out)
   (define exp
-    (for/list ([exp (hash-ref (bld-world-tbl ws) 'Expected)])
+    (for/list ([exp (hash-ref (bld-world-tbl ws) '%Expected)])
       (define str (string->exp exp))
       (displayln str out)
       exp))
@@ -558,7 +755,7 @@
   ;; Initialize command tries for pending commands.
   (initialize-cmd-tries)
   ;; Populate the exp for validation.  
-  (current-expected (hash-ref (bld-world-tbl ws) 'Expected))
+  (current-expected (hash-ref (bld-world-tbl ws) '%Expected))
   ;; Open the log file.
   (current-log (open-output-file log-file #:exists 'replace)))
 
@@ -566,7 +763,7 @@
   (debug-printf "validate-puzzle ~a ~a~%" state kval)
   (define tbl (bld-world-tbl ws))
   (debug-printf "tbl=~a~%" tbl)
-  (define cats (hash-ref tbl 'Category))
+  (define cats (hash-ref tbl '%Category))
   (debug-printf "cats=~a~%" cats)
   (cond
     [(empty? cats)
@@ -587,15 +784,15 @@
 
 (define (load-init tbl inits)
   (debug-printf "load-init~%")
-  (hash-set! tbl 'Category (map car inits))
+  (hash-set! tbl '%Category (map car inits))
   (for ([init inits])
     (hash-set! tbl (car init) (cdr init))))
 
 (define (load-exp tbl exp)
-  (hash-set! tbl 'Expected exp))
+  (hash-set! tbl '%Expected exp))
 
 (define (load-stmts tbl stmts)
-  (hash-set! tbl 'Statement stmts))
+  (hash-set! tbl '%Statement stmts))
 
 (define (read-file ws state kval)
   (debug-printf "read-file ~a ~a~%" state kval)
@@ -630,16 +827,16 @@
 
 (define STATES
   (states-hash
-   (menu
-    (edit EVT-RIGHT       push-key         menu edit)
+   (main
+    (edit EVT-RIGHT       push-key         main edit)
     (edit EVT-STMT        beg-stmt         stmt input)
     (edit EVT-EXP        beg-exp           exp input)
     (edit EVT-ESC         #F               stmt input)
     (edit EVT-RUN         beg-solve        solve edit)
-    (edit EVT-LOAD        read-file        menu edit)
-    (edit string->number  sel-key#         menu edit)
+    (edit EVT-LOAD        read-file        main edit)
+    (edit string->number  sel-key#         main edit)
 
-    (error EVT-ESC         clear-key-flds! menu edit))
+    (error EVT-ESC         clear-key-flds! main edit))
 
    (oper    
     (edit EVT-ESC         clear-key-flds! oper edit)
@@ -663,7 +860,7 @@
     (edit EVT-UP          up-key-val         cat edit)
     (edit EVT-DOWN        down-key-val       cat edit)
     (edit EVT-ESC         clear-key-flds!    cat edit)
-    (edit EVT-RIGHT       push-key           cat input)
+    (edit EVT-RIGHT       push-key           cat edit)
     (edit EVT-LEFT        pop-key            cat edit)
     (edit EVT-SEL-VAL     sel-key-val        cat edit)
     (edit EVT-SEL-NUM     sel-key-num        cat edit)
@@ -674,7 +871,7 @@
    (stmt
     (input EVT-DEL        rem-stmt-tmp       stmt input)
     (input EVT-ENTER       add-stmt-val      stmt edit)
-    (input EVT-MENU         beg-menu         menu edit)
+    (input EVT-MAIN        beg-main         main edit)
     (input EVT-EXP         beg-exp         exp input)
     (input EVT-ESC          clear-stmt-flds! stmt edit)
 
@@ -682,8 +879,8 @@
     (edit EVT-DEL          rem-stmt-val      stmt edit)
     (edit EVT-UP           up-stmt-val       stmt edit)
     (edit EVT-DOWN         down-stmt-val     stmt edit)
-    (edit EVT-MENU         beg-menu                menu edit)
-    (edit EVT-EXP        beg-exp           exp input)
+    (edit EVT-MAIN       beg-main            main edit)
+    (edit EVT-EXP        beg-exp             exp input)
     (edit EVT-ESC          clear-stmt-flds!  stmt edit)
     (edit EVT-LEFT         toggle-exp?      stmt edit)
     (edit EVT-RIGHT        toggle-exp?      stmt edit)
@@ -694,7 +891,7 @@
    (exp
     (input EVT-DEL         rem-exp-tmp       exp input)
     (input EVT-ENTER       add-exp-val       exp edit)
-    (input EVT-MENU        beg-menu          menu edit)
+    (input EVT-MAIN        beg-main          main edit)
     (input EVT-STMT        beg-stmt          stmt edit)
     (input EVT-ESC         clear-exp-flds!  exp edit)
 
@@ -702,7 +899,7 @@
     (edit EVT-DEL          rem-exp-val      exp edit)
     (edit EVT-UP           up-exp-val       exp edit)
     (edit EVT-DOWN         down-exp-val     exp edit)
-    (edit EVT-MENU         beg-menu          menu edit)
+    (edit EVT-MAIN         beg-main          main edit)
     (edit EVT-STMT         beg-stmt          stmt edit)
     (edit EVT-ESC          clear-exp-flds!  exp edit)
     (edit EVT-LEFT         toggle-exp?      exp edit)
@@ -713,7 +910,7 @@
 
    (solve    
     (edit EVT-CMD          process-cmd       solve edit)
-    (edit EVT-MENU         beg-menu          menu edit)
+    (edit EVT-MAIN         beg-main          main edit)
 
     (msg  EVT-ESC         clear-solve-flds!  solve edit))))
 
