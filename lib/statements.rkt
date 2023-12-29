@@ -4,12 +4,12 @@
 ;;; STATEMENTS
 ;;;
 
-(provide relate!      λrelate!
-         distinct!    λdistinct!
-         xor!         λxor!
-         criss-cross! λcriss-cross!         
+(provide positive!      λpositive!
+         negative!    λnegative!
+         either-or!   λeither-or!
+         either-and!  λeither-and!         
          seq!         λseq!
-         next!        λnext!)
+         next-to!     λnext-to!)
 
 (require (for-syntax syntax/parse)
          utils/cmd-queue
@@ -35,6 +35,130 @@
       (printf "~a~%" str)
       (displayln str (current-log)))
   (prev-stmt# stmt#))
+
+;;;
+;;; POSITIVE!
+;;;
+
+(define-syntax (positive! stx)
+  (syntax-parse stx
+    [(_ key1:expr key2:expr)
+     #'(add-to-pending 1 λpositive!
+                       (key-clause key1) (key-clause key2))]))
+
+(define/contract (λpositve! key1 key2)
+  (-> valid-key/c valid-key/c any)
+  (log "positive! ~a ~a~%" key1 key2)
+  (λrelate! #t key1 key2))
+
+(define/contract λpositive!
+  (case->
+   (-> valid-key/c valid-key/c any)
+   (-> boolean? valid-key/c valid-key/c any))
+
+  ;; The case-lambda allows for two syntaxes: one with boolean and one without.
+  ;; We simply add the default #t boolean to the arguments and re-route to that form
+  ;; of the statement.
+  (case-lambda
+    [(key1 key2) (λrelate! #t key1 key2)]
+    [(val key1 key2)
+     (log "relate! ~a ~a ~a~%" val key1 key2)
+
+     ;; Check if val is different from a previously set (non-unknown) value
+     ; of the puzzle-box. If different this indciates an inconsistancy in the
+     ;; puzzle clues, which are considered true and whose resolution cannot
+     ;; contradict one another. 
+     (define puzzle-box (? key1 key2))
+     (cond
+       [(unknown? puzzle-box) (void)]
+       [(eq? puzzle-box val) (void)]
+       [else (error (format "puzzle-box value ~a differs from val for ~a ~a ~a~%"
+                            puzzle-box key1 key2 val))])
+
+     ;; Check that we have not already marked true along
+     ; the category/key row or column. If we have this means
+     ;; there is either a problem in the code or in the
+     ;; formulation of puzzle clues.
+     (when (true? val)
+       (check-for-trues key1 key2))
+  
+     ;; At this point we can set the puzzle-box value, if unknown. 
+     (when (unknown? puzzle-box)
+       (hash-set! puzzle (set key1 key2) val))
+
+     ;; The following logic resolves relationships between
+     ;; category1 and category2.
+     (cond
+       ;; when grid value is true we mark the othr row and column
+       ;; values false. They cannot be true and are eliminated.
+       [(true? val)
+        (define cat1 (car key1))
+        (debug-printf "cat1=~a~%" cat1)
+        (for ([prop1 (? cat1)])
+          (define key1 (cons cat1 prop1))
+          (debug-printf "key1=~a~%" key1)
+          (when (unknown? (? key1 key2))
+            (λrelate! #f key1 key2)))
+        (define cat2 (car key2))
+        (debug-printf "cat2=~a~%" cat2)
+        (for ([prop2 (? cat2)])
+          (define key2 (cons cat2 prop2))
+          (debug-printf "key2=~a~%" key2)
+          (when (unknown? (? key1 key2))
+            (λrelate! #f key1 key2)))]
+
+       ;; val is false.
+       [else 
+        ;; When only 1 grid value in a row or column is unknown,
+        ;; it must be true.
+        (define (check-assign-true key1 key2)
+          (define cat2 (car key2))
+          (define result (? key1 cat2))
+          (cond
+            [(1? (count true? result)) (void)]
+            [(1? (count unknown? result))
+             (define prop2
+               (list-ref (? cat2) (vector-member UNKNOWN
+                                                 (list->vector result))))
+             (λrelate! #t key1 (cons cat2 prop2))]
+            [else (void)]))
+        (check-assign-true key1 key2)
+        (check-assign-true key2 key1)])
+
+     ;; Fundamental Category Relationships
+     ;; (c1 * c2) * (c1 * c3) = (c1 * c2) * (c2 * c3)
+
+     ;; When (c1 * c2) is true and (c1 * c3) is true, (c2 * c3) is true.
+     (when (true? val)
+       (define (true+true->true key)
+         (debug-printf "true+true->true ~a~%" key)
+         (define trues (?-= key #t))
+         (unless (empty? trues)
+           (for/fold ([key1 (car trues)])
+                     ([key2 (rest trues)])
+             (debug-printf "key1=~a key2=~a~%" key1 key2)
+             ;; If the categories are different and their box-val unknown
+             ;; set their relationship to true.
+             (when (and (not (eq? (car key1) (car key2)))
+                        (unknown? (? key1 key2)))
+               (λrelate! #t key1 key2))
+             key2)))
+       (true+true->true key1)
+       (true+true->true key2))
+     
+     ;; wWen (c1 * c2) is true and (c1 * c3) is false, (c2 c3) is false.
+     (define (true+false->false key)
+       (define trues (?-= key #t))
+       (unless (empty? trues)
+         (for ([key1 trues])
+           (define falses
+             (filter-not (λ (v) (eq? (car v) (car key1)))
+                         (?-= key #f)))        
+           (for ([key2 falses])
+             (when (unknown? (? key1 key2))
+               (λrelate! #f key1 key2))))))  
+     (true+false->false key1)
+     (true+false->false key2)]))
 
 ;;;
 ;;; RELATE!
@@ -185,16 +309,16 @@
                    key1 key2 vs2))))
 
 ;;;
-;;; DISTINCT!
+;;; negative!
 ;;;;
 
-(define-syntax (distinct! stx)
+(define-syntax (negative! stx)
   (syntax-parse stx
     [(_ key ...)
-     #'(add-to-pending 1 λdistinct! (key-clause key) ...)]))
+     #'(add-to-pending 1 λnegative! (key-clause key) ...)]))
 
-(define (λdistinct! . keys)
-  (log "distinct! ~a~%" keys)
+(define (λnegative! . keys)
+  (log "negative! ~a~%" keys)
   (define (assign-false keys)
     (for* ([key1 keys]
            [key2 (remove key1 keys)])
@@ -203,16 +327,16 @@
   (assign-false keys))
 
 ;;;
-;;; XOR
+;;; either-or
 ;;;
 
-;; xor!: Compares the puzzle value at s1 with the puzzle
+;; either-or!: Compares the puzzle value at s1 with the puzzle
 ;; value at s2.
-(define-syntax (xor! stx)
+(define-syntax (either-or! stx)
   (syntax-parse stx
     #:datum-literals (:)
     [(_ (category:id : property:expr) [key1 key2])
-     #'(add-to-pending #f λxor!          
+     #'(add-to-pending #f λeither-or!          
                        (list (cons (quote category)
                                    (category-apply (quote category) property))
                              (key-clause key1))
@@ -220,10 +344,10 @@
                                    (category-apply (quote category) property))
                              (key-clause key2)))]    
     [(_ key-pair1 key-pair2)
-     #'(add-to-pending #f λxor!
+     #'(add-to-pending #f λeither-or!
                        (key-pair-clause key-pair1) (key-pair-clause key-pair2))]))
-(define (λxor! key1 key2)
-  (log "xor! key1=~a key2=~a~%" key1 key2)
+(define (λeither-or! key1 key2)
+  (log "either-or! key1=~a key2=~a~%" key1 key2)
   ;; Both prop-names are the same. Set the remaining prop-vals to false.
   (cond
     [(and (eq? (caar key1) (caar key2))
@@ -262,43 +386,43 @@
     ;; Both are true, we have an error.
     [(and (eq? #t ans1) (eq? #t ans2))
      (raise-user-error
-      (format "λxor! ~a ~a both propositons are true." key1 key2))]
+      (format "λeither-or! ~a ~a both propositons are true." key1 key2))]
     ;; 1 is true, we don't need to do anything.
     [(or (eq? #t ans1) (eq? #t ans2)) (void)]        
     ;; Both are false, we have an error.
     [(and (false? ans1) (false? ans2))
      (raise-user-error
-      (format "λxor! ~a ~a both propositons are false." key1 key2))]
+      (format "λeither-or! ~a ~a both propositons are false." key1 key2))]
     ;; Both are unknown, unable to deduce at this time.
     [(and (eq? '? ans1) (eq? '? ans2))
      (raise-user-error
-      (format "λxor! ~a ~a both propositons are unknown." key1 key2))]
+      (format "λeither-or! ~a ~a both propositons are unknown." key1 key2))]
     ;; The 1st proposition is false, 2nd must be true.
     [(false? ans1)
      (λrelate! #t (car key2) (cadr key2))]
     [else (λrelate! #t (car key1) (cadr key1))]))
 
 ;;;
-;;; CRISS-CROSS!
+;;; either-and!
 ;;;
 
-(define-syntax (criss-cross! stx)
+(define-syntax (either-and! stx)
   (syntax-parse stx
     [(_ [k1 k2] [k3 k4])
-     #'(add-to-pending #f λcriss-cross!
+     #'(add-to-pending #f λeither-and!
                        (key-clause k1)
                        (key-clause k2)
                        (key-clause k3)
                        (key-clause k4))]))
 
-(define (λcriss-cross! key1 key2 key3 key4)
+(define (λeither-and! key1 key2 key3 key4)
   (log "criss-coross! ~a ~a ~a ~a~%"
        key1 key2 key3 key4)
   ;; Set negative relationshiops between 1st pair of props.
-  (apply λdistinct! (list key1 key2))
+  (apply λnegative! (list key1 key2))
   
   ;; Set negative relationships between 2nd pair of props.
-  (apply λdistinct! (list key3 key4))
+  (apply λnegative! (list key3 key4))
 
   (define cat1 (car key1))
   (define prop1 (cdr key1))
@@ -373,14 +497,14 @@
     (λrelate! #t key1 key4))
     
   (define ans1
-    (suppress-error (λxor! (list key1 key3)
+    (suppress-error (λeither-or! (list key1 key3)
                            (list key1 key4))))
   (define ans2
-    (suppress-error (λxor! (list key2 key3)
+    (suppress-error (λeither-or! (list key2 key3)
                            (list key2 key4))))
   
   (unless (and ans1 ans2)
-    (raise-user-error "criss-cross ~a ~a ~a ~a unresolved.~%"
+    (raise-user-error "either-and ~a ~a ~a ~a unresolved.~%"
                       key1 key2 key3 key4)))
 
 (define (check-seq-idxs mn mx group-results)
@@ -455,10 +579,10 @@
     [(_ key:expr ...)
      #'(add-to-pending #f λseq! (key-clause key) ...)]))
 
-(define-syntax (next! stx)
+(define-syntax (next-to! stx)
   (syntax-parse stx    
     [(_ category:id key:expr ...)
-     #'(add-to-pending #f λnext! (quote category)
+     #'(add-to-pending #f λnext-to! (quote category)
                        (key-clause key) ...)]))
 
 (define (λseq! . keys)
@@ -546,7 +670,7 @@
   (define category (car category/n))
 
   ;; Prop1 and prop2 have a negative relationship.
-  (λdistinct! key1 key2)
+  (λnegative! key1 key2)
   
   (define-values (resolved? marks) (shift? category/n key1 key2))
   (cond
@@ -630,19 +754,19 @@
      (values #t (list prop2-mark-val prop3-mark-val))]
     [else (values #f (list prop2-mark-false-vals prop3-mark-false-vals))]))
 
-(define (λnext! . keys)
-  (log "next! ~a~%" keys)
-  (apply xor-shift! (cons (car keys) 1) (cdr keys)))
+(define (λnext-to! . keys)
+  (log "next-to! ~a~%" keys)
+  (apply either-or-shift! (cons (car keys) 1) (cdr keys)))
 
-(define/contract (xor-shift! category/n key1 key2)
+(define/contract (either-or-shift! category/n key1 key2)
   (-> key/c key/c key/c any)
-  (debug-printf "xor-shift! ~a ~a~a~%"
+  (debug-printf "either-or-shift! ~a ~a~a~%"
                 category/n key1 key2)
   (define category (car category/n))
   (define props (? category))
   
   ;; Prop1 and prop2 have a negative relationship.
-  (λdistinct! key1 key2)
+  (λnegative! key1 key2)
 
   ;; Get key1 unknowns
   (define key1-unknowns (map (λ (n) (list-ref props n))
@@ -663,7 +787,7 @@
   (cond
     ;; Neither are resolved. Fail the statement.
     [(and (false? key1-resolved?) (false? key2-resolved?))
-     (raise-user-error "next! ~a ~a ~a unresolved." category/n key1 key2)]
+     (raise-user-error "next-to! ~a ~a ~a unresolved." category/n key1 key2)]
 
     ;; key1->key2 is resolved, key2->key1 is not. Do key1->key2 shift.
     [(false? key2-resolved?)
@@ -689,4 +813,4 @@
      ;; Mark key2 negative relationships.
      (for ([n key2-rems])
        (λrelate! #f key2 (cons category n)))
-     (raise-user-error "next! ~a ~a ~a unresolved." category/n key1 key2)]))
+     (raise-user-error "next-to! ~a ~a ~a unresolved." category/n key1 key2)]))

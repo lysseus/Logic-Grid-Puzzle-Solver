@@ -264,8 +264,8 @@
   (define tbl (make-hash '((%Category)
                            (%Statement)
                            (%Expected)
-                           (%Main %Operator %Category)                           
-                           (%Operator relate! distinct! xor! criss-cross! seq! next!))))
+                           (%Main %Relationship %Category)                           
+                           (%Relationship positive! negative! either-or! either-and! seq! next-to!))))
   (bld-world 0 #f
              (State 'main 'edit "") "" '%Main empty #f
              '() "" #f 0

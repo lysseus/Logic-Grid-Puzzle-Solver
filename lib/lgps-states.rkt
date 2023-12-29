@@ -107,7 +107,7 @@
     (define val (list-ref vals (sub1 n)))
     (debug-printf "val=~a~%" val)
     (define ans (case key
-                  [(%Operator %Category) val]
+                  [(%Relationship %Category) val]
                   [else (cons key val)]))
     (if (false? (bld-world-exp? ws))
         (set-bld-world-stmt-tmp! ws (append (bld-world-stmt-tmp ws) (list ans)))
@@ -124,7 +124,7 @@
     (define val (list-ref vals (sub1 n)))
     (debug-printf "val=~a~%" val)
     (define ans (case key
-                  [(%Operator %Category) val]
+                  [(%Relationship %Category) val]
                   [else (cons key n)]))
     (set-bld-world-stmt-tmp! ws (append (bld-world-stmt-tmp ws) (list ans)))
     (clear-key-flds! ws state kval)))
@@ -178,7 +178,7 @@
     (define next (list-ref vals (sub1 n)))
     (define id (case next
                  [(%Category) 'cat]
-                 [(%Operator) 'oper]
+                 [(%Relationship) 'oper]
                  [else (State-id state)]))
     (define task-id 'edit)    
     (debug-printf "curr=~a next=~a id=~a task-id=~a~%" curr next id task-id)
@@ -202,7 +202,7 @@
     (clear-key-flds! ws state kval)
     (define id (case key
                  [(%Category) 'cat]
-                 [(%Operator) 'oper]
+                 [(%Relationship) 'oper]
                  [else 'main]))
     (debug-printf "id=~a~%" id)
     (raise (cons id 'edit))))
@@ -250,8 +250,8 @@
        (natural? (cdr v))))
 
 
-(define OPERATOR-ERROR "Operator not valid.")
-(define ARGUMENT-NUMBER-ERROR "Wrong number of arguments for this operator.")
+(define RELATIONSHIP-ERROR "Relationship not valid.")
+(define ARGUMENT-NUMBER-ERROR "Wrong number of arguments for this relationship.")
 (define ARGUMENT-TYPE-ERROR "Arguments must be category/property pairs.")
 (define ARGUMENT-FIRST-TYPE-ERROR "1st argument must be a sequence-category or sequence-category/offset pair.")
 (define ARGUMENT-FIRST-CATEGORY-ERROR "1st argument must be a sequence-category.")
@@ -270,25 +270,25 @@
 (define SEQUENCE-CATEGORY-ERROR "Sequence-category found in category/property pairs.")
 
 ;; Validates syntactically the new Statement entry before committing it.I
-;; Each operator has its own procedure for validation and formats a succcessful
+;; Each relationship has its own procedure for validation and formats a succcessful
 ;; statment syntax into a list appropriate for its execution function.
 (define (normalize-statement oper . args)
   (debug-printf "normalize-statement ~a ~a~%" oper args)  
   (define len (length args))
   (case oper
-    [(relate!)      (normalize-relate! len oper args)]
-    [(|relate! #f|) (normalize-distinct! len oper args)]
-    [(distinct!)    (normalize-distinct! len oper args)]
-    [(xor!)         (normalize-xor! len oper args)]
-    [(criss-cross!) (normalize-criss-cross! len oper args)]
+    [(positive!)      (normalize-positive! len oper args)]
+    [(|positive! #f|) (normalize-negative! len oper args)]
+    [(negative!)    (normalize-negative! len oper args)]
+    [(either-or!)         (normalize-either-or! len oper args)]
+    [(either-and!) (normalize-either-and! len oper args)]
     [(seq!)         (normalize-seq! len oper args)]
-    [(next!)        (normalize-next! len oper args)]
-    [else (raise-user-error OPERATOR-ERROR)]))
+    [(next-to!)        (normalize-next-to! len oper args)]
+    [else (raise-user-error RELATIONSHIP-ERROR)]))
 
-;; Validates the relate! arguments and returns a list representation
+;; Validates the positive! arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-relate! len oper args)
+;; relationship.
+(define (normalize-positive! len oper args)
   (case len
     [(2)
      (define cp1 (first args))
@@ -304,10 +304,10 @@
        [else (raise-user-error ARGUMENT-TYPE-ERROR)])]
     [else (raise-user-error ARGUMENT-NUMBER-ERROR)]))
 
-;; Validates the distinct! arguments and returns a list representation
+;; Validates the negative! arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-distinct! len oper args)
+;; relationship.
+(define (normalize-negative! len oper args)
   (case len
     [(0 1)
      (raise-user-error ARGUMENT-NUMBER-ERROR)]
@@ -329,19 +329,19 @@
         (raise-user-error CATEGORY-ALL-DUPLICATE-ERROR)]       
        [else (cons oper args)])]))
 
-(define (normalize-xor! len oper args)
+(define (normalize-either-or! len oper args)
   (case len
     ;; A is either B or C.
-    [(3) (normalize-xor!-3 len oper args)]
+    [(3) (normalize-either-or!-3 len oper args)]
     ;; Either A is B or C is D.
-    [(4) (normalize-xor!-4 len oper args)]
+    [(4) (normalize-either-or!-4 len oper args)]
     [else
      (raise-user-error ARGUMENT-NUMBER-ERROR)]))
 
-;; Validates the xor! 3 arguments and returns a list representation
+;; Validates the either-or! 3 arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-xor!-3 len oper args)
+;; relationship.
+(define (normalize-either-or!-3 len oper args)
   (define cps? (andmap category/property-pair? args))
   (define cps (if cps?
                   (remove-duplicates args)
@@ -367,10 +367,10 @@
      (raise-user-error CATEGORY-1+3-DUPLICATE-ERROR)]
     [else (list oper (first args) (list (second args) (third args)))]))
 
-;; Validates the xor! 4 arguments and returns a list representation
+;; Validates the either-or! 4 arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-xor!-4 len oper args)
+;; relationship.
+(define (normalize-either-or!-4 len oper args)
   (define cps? (andmap category/property-pair? args))
   (define cps (if cps?
                   args
@@ -405,10 +405,10 @@
                 (list (first args) (second args))
                 (list (third args) (fourth args)))]))
 
-;; Validates the criss-cross! arguments and returns a list representation
+;; Validates the either-and! arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-criss-cross! len oper args)
+;; relationship.
+(define (normalize-either-and! len oper args)
   (case len    
     [(4) (define (max-category-count cps)
            (define cs (map car cps))
@@ -437,7 +437,7 @@
 
 ;; Validates the seq! arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
+;; relationship.
 (define (normalize-seq! len oper args)
   (case len
     [(1 2)
@@ -457,10 +457,10 @@
              (raise-user-error SEQUENCE-CATEGORY-ERROR)]
             [else (cons oper args)])]))
 
-;; Validates the next! arguments and returns a list representation
+;; Validates the next-to! arguments and returns a list representation
 ;; of the statement, or raises an issue if the syntax is invalid for the
-;; operator.
-(define (normalize-next! len oper args)
+;; relationship.
+(define (normalize-next-to! len oper args)
   (case len
     [(3) (cond
            [(not (symbol? (first args)))
@@ -735,22 +735,22 @@
   (for ([stmt stmts])
     (apply add-to-pending
            (case (car stmt)
-             [(relate!) (append (list 1 λrelate!) (cdr stmt))]
-             [(distinct!) (append (list 1 λdistinct!) (cdr stmt))]
-             [(xor!)
+             [(positive!) (append (list 1 λpositive!) (cdr stmt))]
+             [(negative!) (append (list 1 λnegative!) (cdr stmt))]
+             [(either-or!)
               (define s1 (first (cdr stmt)))
               (define s2 (second (cdr stmt)))
-              (append (list #f λxor!)
+              (append (list #f λeither-or!)
                       (case (list? s1)
                         [(#f)
                          (list [list s1 (first s2)]
                                [list s1 (second s2)])]
                         [else (cdr stmt)]))]
-             [(criss-cross!) (append (list #f λcriss-cross!)
+             [(either-and!) (append (list #f λeither-and!)
                                      (first (cdr stmt))
                                      (second (cdr stmt)))]
              [(seq!) (append (list #f λseq!) (cdr stmt))]
-             [(next!) (append (list #f λnext!) (cdr stmt))]
+             [(next-to!) (append (list #f λnext-to!) (cdr stmt))]
              [else (error (format "~a: ~a not a valid form." (car stmt) (cdr stmt)))])))
   ;; Initialize command tries for pending commands.
   (initialize-cmd-tries)
